@@ -1,0 +1,224 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Der Energiemanager ist bereits eingerichtet."
+    },
+    "error": {
+      "invalid_tariff": "Tarif-Fenster konnten nicht gelesen werden. Format: 02:00-06:00=low@0.18; 18:00-21:00=high@0.35",
+      "no_low_window": "Mindestens ein Fenster muss die Stufe 'low' haben.",
+      "invalid_curve": "Format: Schwelle:Anhebung, z. B. 0:2, 5:1",
+      "invalid_model": "Format: base, a, b, min – z. B. 35, 54.3, 3.2, 8"
+    },
+    "step": {
+      "user": {
+        "title": "Akku und Prognosen",
+        "data": {
+          "e3dc_device": "E3DC-Gerät (E3DC RSCP)",
+          "soc_sensor": "Akku-SoC-Sensor",
+          "house_power_sensor": "Hausverbrauch (Leistung, W oder kW)",
+          "pv_power_sensor": "PV-Leistung (optional, W oder kW)",
+          "battery_capacity_kwh": "Akkukapazität",
+          "battery_max_charge_w": "Max. Ladeleistung des Akkus",
+          "battery_max_discharge_w": "Max. Entladeleistung des Akkus",
+          "solcast_today": "Solcast-Prognose heute",
+          "solcast_tomorrow": "Solcast-Prognose morgen",
+          "weather_entity": "Wetter-Entität (stündliche Vorhersage)",
+          "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)"
+        }
+      },
+      "tariff": {
+        "title": "Stromtarif",
+        "description": "Ein Fenster je Eintrag, getrennt durch ';' oder Zeilenumbruch: START-ENDE=stufe@preis. Stufen: low, normal, high. Zeiten außerhalb der Fenster gelten als 'normal'.",
+        "data": {
+          "tariff_windows": "Tarif-Fenster",
+          "price_normal": "Preis Normaltarif"
+        }
+      },
+      "devices": {
+        "title": "Wallboxen und Wärmepumpe",
+        "description": "Wallboxen: Namenspräfixe der E3DC-RSCP-Wallboxen, kommagetrennt (z. B. 'garage, carport' für switch.garage_sun_mode usw.). Kurve: unter Schwelle °C → Anhebung K. Modell: Tagesverbrauch = base + max(min, a − b·T).",
+        "data": {
+          "wallboxes": "Wallboxen",
+          "sg_ready_1_switch": "SG-Ready Kontakt 1",
+          "sg_ready_2_switch": "SG-Ready Kontakt 2",
+          "sg_surplus_sensor": "E3DC SG-Ready-Sensor (PV-Überschuss)",
+          "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
+          "hp_offset_curve": "Anhebungskurve",
+          "hp_consumption_model": "Verbrauchsmodell Wärmepumpe"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Energiemanager",
+        "menu_options": {
+          "basic": "Akku und Prognosen",
+          "tariff": "Stromtarif",
+          "devices": "Wallboxen und Wärmepumpe"
+        }
+      },
+      "tariff": {
+        "title": "Stromtarif",
+        "description": "Ein Fenster je Eintrag, getrennt durch ';' oder Zeilenumbruch: START-ENDE=stufe@preis. Stufen: low, normal, high. Zeiten außerhalb der Fenster gelten als 'normal'.",
+        "data": {
+          "tariff_windows": "Tarif-Fenster",
+          "price_normal": "Preis Normaltarif"
+        }
+      },
+      "devices": {
+        "title": "Wallboxen und Wärmepumpe",
+        "description": "Wallboxen: Namenspräfixe der E3DC-RSCP-Wallboxen, kommagetrennt (z. B. 'garage, carport' für switch.garage_sun_mode usw.). Kurve: unter Schwelle °C → Anhebung K. Modell: Tagesverbrauch = base + max(min, a − b·T).",
+        "data": {
+          "wallboxes": "Wallboxen",
+          "sg_ready_1_switch": "SG-Ready Kontakt 1",
+          "sg_ready_2_switch": "SG-Ready Kontakt 2",
+          "sg_surplus_sensor": "E3DC SG-Ready-Sensor (PV-Überschuss)",
+          "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
+          "hp_offset_curve": "Anhebungskurve",
+          "hp_consumption_model": "Verbrauchsmodell Wärmepumpe"
+        }
+      },
+      "basic": {
+        "title": "Akku und Prognosen",
+        "data": {
+          "e3dc_device": "E3DC-Gerät (E3DC RSCP)",
+          "soc_sensor": "Akku-SoC-Sensor",
+          "house_power_sensor": "Hausverbrauch (Leistung, W oder kW)",
+          "pv_power_sensor": "PV-Leistung (optional, W oder kW)",
+          "battery_capacity_kwh": "Akkukapazität",
+          "battery_max_charge_w": "Max. Ladeleistung des Akkus",
+          "battery_max_discharge_w": "Max. Entladeleistung des Akkus",
+          "solcast_today": "Solcast-Prognose heute",
+          "solcast_tomorrow": "Solcast-Prognose morgen",
+          "weather_entity": "Wetter-Entität (stündliche Vorhersage)",
+          "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_tariff": "Tarif-Fenster konnten nicht gelesen werden. Format: 02:00-06:00=low@0.18; 18:00-21:00=high@0.35",
+      "no_low_window": "Mindestens ein Fenster muss die Stufe 'low' haben.",
+      "invalid_curve": "Format: Schwelle:Anhebung, z. B. 0:2, 5:1",
+      "invalid_model": "Format: base, a, b, min – z. B. 35, 54.3, 3.2, 8"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "tariff_level": {
+        "name": "Tarifstufe",
+        "state": {
+          "low": "Niedrig",
+          "normal": "Normal",
+          "high": "Hoch"
+        }
+      },
+      "price": {
+        "name": "Strompreis"
+      },
+      "target_soc": {
+        "name": "Netzlade-Ziel"
+      },
+      "need_kwh": {
+        "name": "Energiebedarf bis nächstes Niedrigtarif-Fenster"
+      },
+      "charge_power": {
+        "name": "Netzladeleistung"
+      },
+      "battery_action": {
+        "name": "Akku-Entscheidung"
+      },
+      "hp_offset": {
+        "name": "Wärmepumpe Anhebung"
+      },
+      "consumption_profile": {
+        "name": "Verbrauchsprofil Mittel"
+      }
+    },
+    "switch": {
+      "control_active": {
+        "name": "Regelung aktiv"
+      },
+      "simulation": {
+        "name": "Simulationsmodus"
+      },
+      "grid_charging": {
+        "name": "Netzladung im Niedrigtarif"
+      },
+      "hold_in_low": {
+        "name": "Akku im Niedrigtarif nicht entladen"
+      },
+      "pv_p10": {
+        "name": "Pessimistische PV-Prognose (P10)"
+      },
+      "summer_mode": {
+        "name": "Sommer: morgens Platz schaffen"
+      },
+      "summer_active_discharge": {
+        "name": "Sommer: morgens aktiv entladen"
+      },
+      "hp_control": {
+        "name": "Wärmepumpen-Steuerung"
+      },
+      "hp_sg_on_surplus": {
+        "name": "SG-Ready bei PV-Überschuss"
+      },
+      "hp_block_in_high": {
+        "name": "Wärmepumpe im Hochtarif sperren"
+      }
+    },
+    "number": {
+      "safety_factor": {
+        "name": "Sicherheitsfaktor Verbrauch"
+      },
+      "buffer_pct": {
+        "name": "Puffer"
+      },
+      "min_target_soc": {
+        "name": "Netzlade-Ziel minimal"
+      },
+      "max_target_soc": {
+        "name": "Netzlade-Ziel maximal"
+      },
+      "grid_charge_max_w": {
+        "name": "Netzladung max. Leistung"
+      },
+      "grid_charge_min_w": {
+        "name": "Netzladung min. Leistung"
+      },
+      "summer_pv_threshold_kwh": {
+        "name": "Sommer: PV-Schwelle Tag"
+      },
+      "summer_morning_start_h": {
+        "name": "Sommer: Morgen ab"
+      },
+      "summer_morning_end_h": {
+        "name": "Sommer: Morgen bis"
+      },
+      "summer_morning_target_soc": {
+        "name": "Sommer: Entladen bis"
+      },
+      "summer_discharge_w": {
+        "name": "Sommer: Entladeleistung"
+      },
+      "hp_boost_k": {
+        "name": "Wärmepumpe Anhebung im Niedrigtarif"
+      },
+      "history_days": {
+        "name": "Verbrauchshistorie"
+      }
+    },
+    "select": {
+      "wallbox_mode": {
+        "name": "Wallbox {wallbox} Modus",
+        "state": {
+          "aus": "Aus",
+          "netzladen": "Sofort laden (Netz)",
+          "niedrigtarif": "Nur Niedrigtarif",
+          "ueberschuss_niedrigtarif": "PV-Überschuss + Niedrigtarif"
+        }
+      }
+    }
+  }
+}
