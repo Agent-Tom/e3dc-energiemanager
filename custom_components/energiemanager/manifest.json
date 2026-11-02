@@ -1,13 +1,13 @@
 {
   "domain": "energiemanager",
   "name": "Energiemanager (E3DC)",
-  "codeowners": [],
+  "codeowners": ["@Agent-Tom"],
   "config_flow": true,
   "dependencies": ["recorder"],
   "after_dependencies": ["e3dc_rscp", "solcast_solar", "weather"],
-  "documentation": "https://github.com/",
+  "documentation": "https://github.com/Agent-Tom/e3dc-energiemanager",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/",
+  "issue_tracker": "https://github.com/Agent-Tom/e3dc-energiemanager/issues",
   "requirements": [],
   "version": "0.1.0"
 }
