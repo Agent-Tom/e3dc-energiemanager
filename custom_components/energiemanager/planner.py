@@ -261,15 +261,17 @@ def clipping(
     end: datetime,
     ac_limit_kw: float,
     max_charge_kw: float,
-) -> tuple[float, datetime | None]:
+) -> tuple[float, datetime | None, datetime | None]:
     """PV-Energie (kWh) über der AC-Grenze, die nur der Akku aufnehmen kann.
 
-    Liefert (Energie, Beginn der Überschreitung im Zeitraum [start, end)). Je Stunde
-    zählt höchstens die DC-Ladeleistung des Akkus; darüber wird ohnehin abgeregelt.
-    Der Hausverbrauch hängt an der AC-Seite und verringert den Überschuss nicht.
+    Liefert (Energie, Beginn, Ende der Überschreitung im Zeitraum [start, end)). Je
+    Stunde zählt höchstens die DC-Ladeleistung des Akkus; darüber wird ohnehin
+    abgeregelt. Der Hausverbrauch hängt an der AC-Seite und verringert den
+    Überschuss nicht.
     """
     total = 0.0
     first: datetime | None = None
+    last: datetime | None = None
     for p_start, kw in sorted(forecast):
         excess = min(kw - ac_limit_kw, max_charge_kw)
         if excess <= 0:
@@ -280,13 +282,39 @@ def clipping(
         total += excess * (b - a).total_seconds() / 3600
         if first is None:
             first = a
-    return total, first
+        last = b
+    return total, first, last
 
 
 def summer_soc_ceiling(clip_kwh: float, capacity_kwh: float, reserve_pct: float) -> float:
     """Höchster SoC vor der Mittagsspitze, bei dem der Akku sie noch aufnehmen kann."""
     return max(0.0, min(100.0, 100 - clip_kwh / capacity_kwh * 100 - reserve_pct))
 
+
+
+def deficit(profile_kw: list[float], forecast: list[tuple[datetime, float]], start: datetime, end: datetime) -> float:
+    """Energie (kWh), die der Akku in [start, end) abgibt, solange PV das Haus nicht deckt."""
+    pv = {p.replace(minute=0, second=0, microsecond=0): kw for p, kw in forecast}
+    total = 0.0
+    t = start
+    while t < end:
+        hour = t.replace(minute=0, second=0, microsecond=0)
+        nxt = min(end, hour + timedelta(hours=1))
+        total += max(0.0, profile_kw[t.hour] - pv.get(hour, 0.0)) * (nxt - t).total_seconds() / 3600
+        t = nxt
+    return total
+
+
+def peak_charge_limit_w(pv_kw: float, ac_limit_kw: float, max_w: int, margin_w: int, step_w: int) -> int:
+    """Ladeleistung, die nur den PV-Anteil über der AC-Grenze in den Akku lässt.
+
+    Mit Aufschlag und auf volle Stufen aufgerundet, damit nichts abgeregelt wird und
+    die dauerhaften Leistungsgrenzen nicht bei jeder Wolke neu geschrieben werden.
+    """
+    need = (pv_kw - ac_limit_kw) * 1000 + margin_w
+    if need <= 0:
+        return 0
+    return min(max_w, math.ceil(need / step_w) * step_w)
 
 def hp_base_offset(temp: float | None, curve: list[tuple[float, float]]) -> float:
     """curve: [(Schwelle °C, Anhebung K)], z. B. [(0, 2), (5, 1)]: unter 0 °C +2, unter 5 °C +1."""

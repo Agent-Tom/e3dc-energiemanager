@@ -332,27 +332,30 @@ class TestSommer(unittest.TestCase):
     ]
 
     def test_clipping(self):
-        kwh, ab = planner.clipping(self.PROGNOSE, dt(5), dt(0, tag=3), 12.0, 12.0)
+        kwh, ab, bis = planner.clipping(self.PROGNOSE, dt(5), dt(0, tag=3), 12.0, 12.0)
         self.assertAlmostEqual(kwh, 2 + 5 + 6 + 3)  # 15 Uhr liegt genau auf der Grenze
-        self.assertEqual(ab, dt(11))
+        self.assertEqual((ab, bis), (dt(11), dt(15)))
 
     def test_clipping_nur_im_zeitraum(self):
-        kwh, ab = planner.clipping(self.PROGNOSE, dt(12, 30), dt(0, tag=3), 12.0, 12.0)
+        kwh, ab, bis = planner.clipping(self.PROGNOSE, dt(12, 30), dt(0, tag=3), 12.0, 12.0)
         self.assertAlmostEqual(kwh, 0.5 * 5 + 6 + 3)
         self.assertEqual(ab, dt(12, 30))  # laufende Spitze beginnt jetzt
-        self.assertEqual(planner.clipping(self.PROGNOSE, dt(5), dt(11), 12.0, 12.0), (0.0, None))
+        self.assertEqual(bis, dt(15))
+        self.assertEqual(planner.clipping(self.PROGNOSE, dt(5), dt(11), 12.0, 12.0), (0.0, None, None))
+        _, _, bis = planner.clipping(self.PROGNOSE, dt(5), dt(13, 20), 12.0, 12.0)
+        self.assertEqual(bis, dt(13, 20))
 
     def test_clipping_begrenzt_auf_dc_ladeleistung(self):
-        kwh, _ = planner.clipping([(dt(12), 30.0)], dt(5), dt(0, tag=3), 12.0, 12.0)
+        kwh, _, _ = planner.clipping([(dt(12), 30.0)], dt(5), dt(0, tag=3), 12.0, 12.0)
         self.assertAlmostEqual(kwh, 12.0)
 
     def test_kein_clipping_an_trueben_tagen(self):
         fc = [(dt(h), 6.0) for h in range(9, 17)]
-        self.assertEqual(planner.clipping(fc, dt(5), dt(0, tag=3), 12.0, 12.0), (0.0, None))
+        self.assertEqual(planner.clipping(fc, dt(5), dt(0, tag=3), 12.0, 12.0), (0.0, None, None))
 
     def test_unsortierte_prognose(self):
-        _, ab = planner.clipping(list(reversed(self.PROGNOSE)), dt(5), dt(0, tag=3), 12.0, 12.0)
-        self.assertEqual(ab, dt(11))
+        _, ab, bis = planner.clipping(list(reversed(self.PROGNOSE)), dt(5), dt(0, tag=3), 12.0, 12.0)
+        self.assertEqual((ab, bis), (dt(11), dt(15)))
 
     def test_summer_soc_ceiling(self):
         # 16,3 kWh = 50 % von 32,6 kWh, dazu 5 % Reserve
@@ -360,6 +363,25 @@ class TestSommer(unittest.TestCase):
         self.assertEqual(planner.summer_soc_ceiling(0.0, KAPAZITAET, 0), 100.0)
         self.assertEqual(planner.summer_soc_ceiling(40.0, KAPAZITAET, 5), 0.0)
 
+
+    def test_deficit(self):
+        # Haus 1 kW konstant, PV ab 9 Uhr: 8 kW, davor nichts
+        profil = [1.0] * 24
+        self.assertAlmostEqual(planner.deficit(profil, self.PROGNOSE, dt(5), dt(11)), 4.0)
+        self.assertAlmostEqual(planner.deficit(profil, self.PROGNOSE, dt(5, 30), dt(9)), 3.5)
+        self.assertAlmostEqual(planner.deficit(profil, self.PROGNOSE, dt(9), dt(11)), 0.0)
+        self.assertAlmostEqual(planner.deficit(profil, [(dt(7), 0.4)], dt(7), dt(8)), 0.6)
+
+    def test_peak_charge_limit(self):
+        # PV 14,2 kW bei 12 kW AC: 2,2 kW + 0,5 kW Aufschlag, auf 500 W aufgerundet
+        self.assertEqual(planner.peak_charge_limit_w(14.2, 12.0, 12000, 500, 500), 3000)
+        self.assertEqual(planner.peak_charge_limit_w(14.0, 12.0, 12000, 500, 500), 2500)
+        self.assertEqual(planner.peak_charge_limit_w(11.8, 12.0, 12000, 500, 500), 500)
+        # Unter der Grenze: Ladesperre
+        self.assertEqual(planner.peak_charge_limit_w(11.5, 12.0, 12000, 500, 500), 0)
+        self.assertEqual(planner.peak_charge_limit_w(3.0, 12.0, 12000, 500, 500), 0)
+        # Nie über die Ladeleistung des Akkus
+        self.assertEqual(planner.peak_charge_limit_w(30.0, 12.0, 12000, 500, 500), 12000)
 
 class TestWpOffset(unittest.TestCase):
     KURVE = [(0.0, 2.0), (5.0, 1.0)]

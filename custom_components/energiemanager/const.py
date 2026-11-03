@@ -85,3 +85,8 @@ POWER_MODE_REFRESH_S = 20
 WALLBOX_TOGGLE_COOLDOWN_S = 180
 # Erst ab dieser erwarteten Abregelungsenergie greift der Sommer-Modus
 SUMMER_MIN_CLIP_KWH = 0.5
+# Ladegrenze in der Spitze: PV − AC-Grenze + Aufschlag, in Stufen gerundet
+SUMMER_CHARGE_MARGIN_W = 500
+SUMMER_CHARGE_STEP_W = 500
+# In der Spitze frei laden, wenn der SoC so weit unter der Ladegrenze liegt
+SUMMER_HYST_PCT = 3

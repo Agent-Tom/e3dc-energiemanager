@@ -99,7 +99,9 @@ SENSORS: tuple[EMSensorDescription, ...] = (
         value=lambda s: s.summer_clip_kwh,
         attrs=lambda s, c: {
             "abregelung_ab": s.summer_clip_start.isoformat() if s.summer_clip_start else None,
+            "abregelung_bis": s.summer_clip_end.isoformat() if s.summer_clip_end else None,
             "ladegrenze_soc": s.summer_soc_ceiling,
+            "ladeleistung_max_w": s.summer_charge_limit,
         },
     ),
     EMSensorDescription(
