@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import logging
 from typing import Any
 
@@ -45,6 +45,7 @@ from .const import (
     POWER_MODE_REFRESH_S,
     SETTINGS_NUMBERS,
     SETTINGS_SWITCHES,
+    SUMMER_MIN_CLIP_KWH,
     UPDATE_INTERVAL_S,
     WALLBOX_TOGGLE_COOLDOWN_S,
 )
@@ -73,7 +74,9 @@ class EMState:
     battery_cmd: BatteryCommand = field(default_factory=BatteryCommand)
     battery_reason: str = ""
     charge_power: int = 0
-    pv_today_kwh: float | None = None
+    summer_clip_kwh: float | None = None       # erwartete PV-Energie über der AC-Grenze (Rest des Tages)
+    summer_clip_start: datetime | None = None
+    summer_soc_ceiling: float | None = None
     hp_offset: float | None = None
     hp_sg_state: int = 0
     wallbox_status: dict[str, str] = field(default_factory=dict)
@@ -143,6 +146,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self._temp_forecast: list[tuple[datetime, float]] = []
         self._temp_fc_at: datetime | None = None
         self._released = False
+        self._summer_block_day: date | None = None
 
     # ------------------------------------------------------------ Hilfen
     @property
@@ -248,8 +252,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self._temp_forecast = out
         self._temp_fc_at = now
 
-    def _pv_forecast(self) -> list[tuple[datetime, float]]:
-        key = "pv_estimate10" if self.settings["pv_p10"] else "pv_estimate"
+    def _pv_forecast(self, key: str | None = None) -> list[tuple[datetime, float]]:
+        if key is None:
+            key = "pv_estimate10" if self.settings["pv_p10"] else "pv_estimate"
         out: list[tuple[datetime, float]] = []
         for ent in (self.cfg.get(CONF_SOLCAST_TODAY), self.cfg.get(CONF_SOLCAST_TOMORROW)):
             st = self.hass.states.get(ent) if ent else None
@@ -273,7 +278,6 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         s.level = planner.current_level(self.windows, now)
         s.price = planner.current_price(self.windows, now, self.normal_price)
         s.soc = _f(self.hass, self.cfg.get(CONF_SOC_SENSOR))
-        s.pv_today_kwh = _f(self.hass, self.cfg.get(CONF_SOLCAST_TODAY))
 
         self._update_plan(now)
 
@@ -320,26 +324,55 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
 
     # ------------------------------------------------------------ Akku
     def _summer_morning(self, now: datetime) -> tuple[bool, bool]:
-        """(Ladesperre aktiv, aktive Entladung aktiv)"""
-        if not self.settings["summer_mode"]:
-            return False, False
-        h = now.hour + now.minute / 60
-        if not (self.settings["summer_morning_start_h"] <= h < self.settings["summer_morning_end_h"]):
-            return False, False
-        if (self.state.pv_today_kwh or 0) < self.settings["summer_pv_threshold_kwh"]:
-            return False, False
-        soc = self.state.soc or 0
-        discharge = (
-            self.settings["summer_active_discharge"]
-            and soc > self.settings["summer_morning_target_soc"]
+        """(Ladesperre aktiv, aktive Entladung aktiv)
+
+        Die Sperre greift nur, wenn die PV-Prognose (P50) heute noch über der
+        AC-Grenze liegt, und nur bis zum Beginn dieser Spitze. Bis zur Ladegrenze
+        (100 % minus erwarteter Überschuss minus Reserve) darf der Akku laden.
+        Einmal gesetzt, bleibt die Sperre bis zur Spitze stehen, damit die
+        Leistungsgrenzen nicht um die Ladegrenze herum hin- und herschalten.
+        """
+        s = self.state
+        day_end = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        clip_kwh, clip_start = planner.clipping(
+            self._pv_forecast("pv_estimate"),
+            now,
+            day_end,
+            float(self.settings["summer_ac_limit_w"]) / 1000,
+            self.batt_max_charge / 1000,
         )
-        return True, discharge
+        s.summer_clip_kwh = round(clip_kwh, 2)
+        s.summer_clip_start = clip_start
+        s.summer_soc_ceiling = None
+        if clip_start is None or clip_kwh < SUMMER_MIN_CLIP_KWH:
+            self._summer_block_day = None
+            return False, False
+        ceiling = planner.summer_soc_ceiling(clip_kwh, self.capacity, float(self.settings["summer_reserve_pct"]))
+        s.summer_soc_ceiling = round(ceiling, 1)
+
+        h = now.hour + now.minute / 60
+        if not self.settings["summer_mode"] or h < self.settings["summer_morning_start_h"] or now >= clip_start:
+            self._summer_block_day = None
+            return False, False
+        if s.soc is None:
+            return False, False
+        if s.soc >= ceiling:
+            self._summer_block_day = now.date()
+        block = self._summer_block_day == now.date()
+        discharge = (
+            block
+            and self.settings["summer_active_discharge"]
+            and s.soc > max(ceiling, float(self.settings["summer_morning_target_soc"]))
+        )
+        return block, discharge
 
     async def _async_battery(self, now: datetime) -> None:
         s = self.state
         cmd = BatteryCommand()
         reason = "Normalbetrieb (E3DC regelt selbst)"
         s.charge_power = 0
+        # Immer rechnen, damit der Sensor auch im Niedrigtarif aktuell bleibt
+        block, discharge = self._summer_morning(now)
 
         if s.level == planner.LOW and s.plan is not None and s.soc is not None:
             if self.settings["grid_charging"] and s.soc < s.plan.target_soc - 1:
@@ -364,14 +397,19 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             else:
                 reason = f"Niedrigtarif: Ziel {s.plan.target_soc} % erreicht"
         else:
-            block, discharge = self._summer_morning(now)
+            peak = (
+                f"ab {s.summer_clip_start:%H:%M} {s.summer_clip_kwh:.1f} kWh über der AC-Grenze"
+                if s.summer_clip_start
+                else ""
+            )
             if discharge:
                 p = int(self.settings["summer_discharge_w"])
+                bis = max(s.summer_soc_ceiling or 0, float(self.settings["summer_morning_target_soc"]))
                 cmd = BatteryCommand(power_mode=PM_DISCHARGE, power_value=p)
-                reason = f"Sommer: morgens entladen ({p} W) bis {self.settings['summer_morning_target_soc']} %"
+                reason = f"Sommer: entladen ({p} W) bis {bis:.0f} %, {peak}"
             elif block:
                 cmd = BatteryCommand(max_charge=0)
-                reason = "Sommer: morgendliche Ladesperre, Platz für Mittags-PV"
+                reason = f"Sommer: Ladesperre bei {s.summer_soc_ceiling:.0f} %, {peak}"
 
         s.battery_cmd = cmd
         s.battery_reason = reason

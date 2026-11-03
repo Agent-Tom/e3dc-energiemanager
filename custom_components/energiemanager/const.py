@@ -57,9 +57,9 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "max_target_soc": (95, 10, 100, 5, "%"),
     "grid_charge_max_w": (8500, 1000, 12000, 100, "W"),
     "grid_charge_min_w": (1500, 500, 6000, 100, "W"),
-    "summer_pv_threshold_kwh": (40, 0, 150, 1, "kWh"),
+    "summer_ac_limit_w": (12000, 1000, 30000, 100, "W"),
+    "summer_reserve_pct": (5, 0, 30, 1, "%"),
     "summer_morning_start_h": (5, 0, 12, 1, "h"),
-    "summer_morning_end_h": (11, 6, 15, 1, "h"),
     "summer_morning_target_soc": (30, 0, 100, 5, "%"),
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
     "hp_boost_k": (2, 0, 5, 0.5, "K"),
@@ -73,7 +73,7 @@ SETTINGS_SWITCHES: dict[str, bool] = {
     "grid_charging": True,
     "hold_in_low": True,         # Akku im Niedrigtarif nicht entladen
     "pv_p10": True,              # pessimistische Solcast-Prognose verwenden
-    "summer_mode": False,        # Morgens Ladesperre für Platz zur Mittagsspitze
+    "summer_mode": False,        # Morgens Ladesperre, wenn mittags PV über der AC-Grenze erwartet wird
     "summer_active_discharge": False,
     "hp_control": True,
     "hp_sg_on_surplus": True,
@@ -83,3 +83,5 @@ SETTINGS_SWITCHES: dict[str, bool] = {
 UPDATE_INTERVAL_S = 30
 POWER_MODE_REFRESH_S = 20
 WALLBOX_TOGGLE_COOLDOWN_S = 180
+# Erst ab dieser erwarteten Abregelungsenergie greift der Sommer-Modus
+SUMMER_MIN_CLIP_KWH = 0.5

@@ -92,6 +92,17 @@ SENSORS: tuple[EMSensorDescription, ...] = (
         },
     ),
     EMSensorDescription(
+        key="summer_clip",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value=lambda s: s.summer_clip_kwh,
+        attrs=lambda s, c: {
+            "abregelung_ab": s.summer_clip_start.isoformat() if s.summer_clip_start else None,
+            "ladegrenze_soc": s.summer_soc_ceiling,
+        },
+    ),
+    EMSensorDescription(
         key="hp_offset",
         native_unit_of_measurement="K",
         value=lambda s: s.hp_offset,

@@ -254,6 +254,40 @@ def charge_power_w(
     return int(math.ceil(p / 100) * 100)
 
 
+# ---------------------------------------------------------------- Sommer
+def clipping(
+    forecast: list[tuple[datetime, float]],
+    start: datetime,
+    end: datetime,
+    ac_limit_kw: float,
+    max_charge_kw: float,
+) -> tuple[float, datetime | None]:
+    """PV-Energie (kWh) über der AC-Grenze, die nur der Akku aufnehmen kann.
+
+    Liefert (Energie, Beginn der Überschreitung im Zeitraum [start, end)). Je Stunde
+    zählt höchstens die DC-Ladeleistung des Akkus; darüber wird ohnehin abgeregelt.
+    Der Hausverbrauch hängt an der AC-Seite und verringert den Überschuss nicht.
+    """
+    total = 0.0
+    first: datetime | None = None
+    for p_start, kw in sorted(forecast):
+        excess = min(kw - ac_limit_kw, max_charge_kw)
+        if excess <= 0:
+            continue
+        a, b = max(p_start, start), min(p_start + timedelta(hours=1), end)
+        if b <= a:
+            continue
+        total += excess * (b - a).total_seconds() / 3600
+        if first is None:
+            first = a
+    return total, first
+
+
+def summer_soc_ceiling(clip_kwh: float, capacity_kwh: float, reserve_pct: float) -> float:
+    """Höchster SoC vor der Mittagsspitze, bei dem der Akku sie noch aufnehmen kann."""
+    return max(0.0, min(100.0, 100 - clip_kwh / capacity_kwh * 100 - reserve_pct))
+
+
 def hp_base_offset(temp: float | None, curve: list[tuple[float, float]]) -> float:
     """curve: [(Schwelle °C, Anhebung K)], z. B. [(0, 2), (5, 1)]: unter 0 °C +2, unter 5 °C +1."""
     if temp is None:

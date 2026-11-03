@@ -129,6 +129,9 @@
       "battery_action": {
         "name": "Akku-Entscheidung"
       },
+      "summer_clip": {
+        "name": "Sommer: PV über AC-Grenze"
+      },
       "hp_offset": {
         "name": "Wärmepumpe Anhebung"
       },
@@ -187,14 +190,14 @@
       "grid_charge_min_w": {
         "name": "Netzladung min. Leistung"
       },
-      "summer_pv_threshold_kwh": {
-        "name": "Sommer: PV-Schwelle Tag"
+      "summer_ac_limit_w": {
+        "name": "Sommer: AC-Grenze"
+      },
+      "summer_reserve_pct": {
+        "name": "Sommer: Platzreserve"
       },
       "summer_morning_start_h": {
         "name": "Sommer: Morgen ab"
-      },
-      "summer_morning_end_h": {
-        "name": "Sommer: Morgen bis"
       },
       "summer_morning_target_soc": {
         "name": "Sommer: Entladen bis"

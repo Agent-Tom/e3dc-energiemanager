@@ -66,6 +66,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 - Nach Erreichen des Ziels im Niedrigtarif: **Entladung gesperrt** bis Fensterende.
 - Der Plan wird beim Eintritt ins Fenster **eingefroren**, außerhalb wird er als Vorschau laufend neu berechnet.
 - WP-Grundoffset aus der Prognose für 07:00 am Folgetag: unter 0 °C +2 K, unter 5 °C +1 K, sonst 0. Im Niedrigtarif zusätzlich +2 K.
+- **Sommer-Modus** richtet sich nach der Abregelung: Aus Solcast **P50** wird die Energie berechnet, die heute noch über der AC-Grenze (12 kW, einstellbar) anfällt und nur der Akku aufnehmen kann (je Stunde höchstens die DC-Ladeleistung). Ab „Sommer: Morgen ab“ bis zum Beginn dieser Spitze darf der Akku bis zur **Ladegrenze** = 100 % − Überschuss/Kapazität − Reserve (5 %) laden, danach Ladesperre (`max_charge = 0`). Die Sperre bleibt einmal gesetzt bis zur Spitze stehen (kein Takten der dauerhaften Leistungsgrenzen). Optional aktive Entladung bis zur Ladegrenze, nie unter „Sommer: Entladen bis“. Unter 0,5 kWh erwarteter Abregelung passiert nichts. Im Niedrigtarif hat die Netzlade-/Halte-Logik Vorrang.
 
 ## Erfahrungen mit Maestro (warum die Ablösung)
 
@@ -89,7 +90,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 3. **Wallbox-Taster** `toggle_charging`: Zuverlässigkeit, Verzögerung bis `binary_sensor.<wb>_charging` nachzieht (Cooldown aktuell 180 s).
 4. Recorder-Statistik: Format von `start` in `statistics_during_period` (float vs. datetime) – im Code beides abgefangen, verifizieren.
 5. Mögliche Überzählung: Zählt `sensor.s10e_pro_house_consumption` die Wallbox mit? Dann verfälschen Ladevorgänge das Verbrauchsprofil.
-6. Sommer-Modus ist nur grob umgesetzt (feste Morgenstunden, PV-Tagesschwelle). Besser wäre: Ladesperre abhängig davon, ob die PV-Prognose die AC-Grenze (12 kW) überschreitet.
+6. Sommer-Modus noch nie an einem Tag mit Abregelung beobachtet (Sensor „Sommer: PV über AC-Grenze“). Während der Spitze lädt der E3DC mit dem gesamten Überschuss, nicht nur mit dem Teil über der AC-Grenze – der Akku kann deshalb vor Ende der Spitze voll sein. Abhilfe wäre, `max_charge` in den Spitzenstunden auf PV − AC-Grenze zu begrenzen (Achtung: dauerhafte Geräteeinstellung, nur in groben Stufen schreiben). Eine Einspeisebegrenzung des Netzbetreibers ist nicht berücksichtigt (dann „Sommer: AC-Grenze“ entsprechend senken).
 7. Options-Flow: optionale Felder lassen sich nicht wieder leeren (Werte werden gemergt).
 8. Tests: Integrationstest mit `pytest-homeassistant-custom-component` (Unit-Tests für `planner.py` liegen in `tests/test_planner.py`).
 
