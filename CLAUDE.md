@@ -98,15 +98,19 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 7. Options-Flow: optionale Felder lassen sich nicht wieder leeren (Werte werden gemergt).
 8. Tests: Integrationstest mit `pytest-homeassistant-custom-component` (Unit-Tests für `planner.py` liegen in `tests/test_planner.py`).
 
-## Vor dem Livegang (Simulation aus) abschalten
+## Livegang
 
-Sonst steuern mehrere Logiken dieselben Geräte:
-- E3DC Maestro: Schalter „Regelung aktiv“ aus
+Seit 03.11.2026 produktiv (Simulationsmodus aus). Damit nicht mehrere Logiken dieselben Geräte steuern, sind abgeschaltet – zum Zurückfallen auf den alten Stand wieder einschalten:
+- E3DC Maestro: `switch.e3dc_maestro_regelung_aktiv`
 - `automation.e3dc_netzlade_ziel_dynamisch_anpassen`
 - `automation.wp_sg_ready_niedrigtarif_octopus_heat`
 - `automation.wp_solltemperatur_2_degc_niedrigtarif_mittags`
 - `automation.sg_ready_0_nach_15_55`
-- `automation.maestro_verbrauchsfaktor_nach_temperaturprognose` (bereits deaktiviert)
+- `automation.sg_ready0`
+- `automation.akku_morgens_auf_10_entleeren_bei_pv_prognose_100_kwh` (steuert Maestros erzwungene Entladung)
+- `automation.maestro_verbrauchsfaktor_nach_temperaturprognose`, `automation.maestro_netzladung_drosseln_8_kw` (waren schon aus)
+
+Thomas nutzt keine eigenen Leistungswerte im E3DC-Portal; `clear_power_limits` (Werkseinstellung) ist damit in Ordnung. `number.remko_mqtt_kalter_warmer` steht nach einem HA-Neustart einige Minuten auf „unknown“; so lange schreibt der Energiemanager die Anhebung nicht.
 
 ## Arbeitsweise
 
