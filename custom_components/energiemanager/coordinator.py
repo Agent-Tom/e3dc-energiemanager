@@ -409,12 +409,24 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         limit_text = f", Laden max. {limit} W ({peak})" if limit is not None else ""
 
         if s.level == planner.LOW and s.plan is not None and s.soc is not None:
-            if self.settings["grid_charging"] and s.soc < s.plan.target_soc - 1:
+            # Was die PV bis Fensterende über den Hausverbrauch hinaus liefert, nicht aus dem Netz laden
+            pv_rest = (
+                planner.surplus(s.profile_kw, self._pv_forecast(), now, s.plan.window_end) if s.profile_kw else 0.0
+            )
+            grid_target = planner.grid_charge_target(s.plan.target_soc, pv_rest, self.capacity)
+            pv_text = f" (Rest {pv_rest:.1f} kWh aus PV)" if pv_rest >= 0.1 else ""
+            if s.soc >= s.plan.target_soc - 1:
+                status = f"Niedrigtarif: Ziel {s.plan.target_soc} % erreicht"
+            elif s.soc >= grid_target - 1:
+                status = f"Niedrigtarif: Ziel {s.plan.target_soc} % kommt aus PV{pv_text}"
+            else:
+                status = f"Niedrigtarif: Ziel {s.plan.target_soc} % nicht erreicht (Netzladung aus)"
+            if self.settings["grid_charging"] and s.soc < grid_target - 1:
                 pv_kw = _kw(self.hass, self.cfg.get(CONF_PV_POWER_SENSOR)) or 0
                 house_kw = _kw(self.hass, self.cfg.get(CONF_HOUSE_POWER_SENSOR)) or 0
                 p = planner.charge_power_w(
                     soc=s.soc,
-                    target_soc=s.plan.target_soc,
+                    target_soc=grid_target,
                     capacity_kwh=self.capacity,
                     now=now,
                     window_end=s.plan.window_end,
@@ -424,13 +436,16 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                 )
                 cmd = BatteryCommand(power_mode=PM_GRID_CHARGE, power_value=p)
                 s.charge_power = p
-                reason = f"Netzladung {p} W: SoC {s.soc:.0f} % → Ziel {s.plan.target_soc} %"
+                reason = (
+                    f"Netzladung {p} W: SoC {s.soc:.0f} % → {grid_target:.0f} %, "
+                    f"Ziel {s.plan.target_soc} %{pv_text}"
+                )
             elif self.settings["hold_in_low"]:
                 cmd = BatteryCommand(max_discharge=0, max_charge=limit)
-                reason = f"Niedrigtarif: Ziel {s.plan.target_soc} % erreicht, Entladung gesperrt{limit_text}"
+                reason = f"{status}, Entladung gesperrt{limit_text}"
             else:
                 cmd = BatteryCommand(max_charge=limit)
-                reason = f"Niedrigtarif: Ziel {s.plan.target_soc} % erreicht{limit_text}"
+                reason = f"{status}{limit_text}"
         elif discharge_to is not None:
             p = int(self.settings["summer_discharge_w"])
             # Grenze mitsenden, damit sie beim Wechsel zur Sperre nicht neu geschrieben wird

@@ -63,6 +63,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 - **Bedarf** = stündliches Verbrauchsprofil (Mittel der letzten 14 Tage aus der Recorder-Statistik) × Temperaturfaktor × **Sicherheitsfaktor 1,5** − PV (**Solcast P10**, pessimistisch), dann + **10 % Puffer**, begrenzt auf **25–95 %**, auf 5 % gerundet.
 - **Temperaturfaktor** = Modell(T-Prognose im Deckungszeitraum) / Modell(T-Mittel Historie), begrenzt 0,7–1,5. Modell aus Thomas' Messdaten 11/2025–10/2026: Tagesverbrauch ≈ `35 + max(8; 54,3 − 3,2·T)` kWh.
 - **Kein Just-in-Time.** Laden beginnt ab Fensterstart, aber mit **begrenzter Leistung**, sodass das Ziel ca. 15 min vor Fensterende erreicht wird. Das schont den Akku (steht nicht lange voll) und verhindert, dass er sich im günstigen Fenster erst leer fährt. Leistung 1500–8500 W, mittags nie unter dem aktuellen PV-Überschuss.
+- **PV im Fenster** wird nicht aus dem Netz geladen: Netzladung nur bis Ziel − PV-Überschuss (PV-Prognose minus Verbrauchsprofil) von jetzt bis Fensterende, laufend neu gerechnet. Deckt die PV das Ziel, lädt der Akku im Fenster nur aus PV (an sonnigen Tagen im Mittagsfenster der Normalfall).
 - Nach Erreichen des Ziels im Niedrigtarif: **Entladung gesperrt** bis Fensterende.
 - Der Plan wird beim Eintritt ins Fenster **eingefroren**, außerhalb wird er als Vorschau laufend neu berechnet.
 - WP-Grundoffset aus der Prognose für 07:00 am Folgetag: unter 0 °C +2 K, unter 5 °C +1 K, sonst 0. Im Niedrigtarif zusätzlich +2 K.

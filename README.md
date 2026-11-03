@@ -5,7 +5,7 @@ Eigene Integration zur Steuerung von E3DC-Hausakku, E3DC-Wallboxen und einer SG-
 ## Funktionen
 
 - **Stromtarif mit mehreren Zeitfenstern** (Stufen `low`, `normal`, `high`, je mit Preis)
-- **Netzladung im Niedrigtarif**: Ziel-SoC aus stündlichem Verbrauchsprofil (Recorder-Statistik), Temperaturkorrektur nach Wärmepumpen-Modell und Solcast-Prognose für den Zeitraum bis zum nächsten Niedrigtarif-Fenster. Die Ladeleistung wird so gewählt, dass das Ziel erst kurz vor Fensterende erreicht wird.
+- **Netzladung im Niedrigtarif**: Ziel-SoC aus stündlichem Verbrauchsprofil (Recorder-Statistik), Temperaturkorrektur nach Wärmepumpen-Modell und Solcast-Prognose für den Zeitraum bis zum nächsten Niedrigtarif-Fenster. Was die PV bis Fensterende über den Hausverbrauch hinaus liefert, wird nicht aus dem Netz geladen. Die Ladeleistung wird so gewählt, dass das Ziel erst kurz vor Fensterende erreicht wird.
 - **Akku im Niedrigtarif halten**: Entladung gesperrt, das Haus läuft günstig aus dem Netz.
 - **Sommer-Modus**: Sagt die PV-Prognose für heute Leistung über der AC-Grenze voraus, lädt der Akku morgens nur bis zu einer Ladegrenze und bleibt dann bis zur Spitze gesperrt (optional aktive Entladung, unter Berücksichtigung des Hausverbrauchs bis dahin). In der Spitze nimmt der Akku nur die PV-Leistung über der AC-Grenze auf, der Rest wird eingespeist. So ist mittags genau so viel Platz frei, wie sonst abgeregelt würde. Der Sensor „Sommer: PV über AC-Grenze“ zeigt die erwartete Energie, Beginn und Ende der Spitze, die Ladegrenze und die aktuelle Ladebegrenzung.
 - **Wallboxen** (E3DC RSCP) mit je einem Modus: Aus, Sofort laden, Nur Niedrigtarif, PV-Überschuss + Niedrigtarif.

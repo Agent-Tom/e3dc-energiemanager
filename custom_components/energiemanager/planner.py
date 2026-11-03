@@ -292,17 +292,34 @@ def summer_soc_ceiling(clip_kwh: float, capacity_kwh: float, reserve_pct: float)
 
 
 
-def deficit(profile_kw: list[float], forecast: list[tuple[datetime, float]], start: datetime, end: datetime) -> float:
-    """Energie (kWh), die der Akku in [start, end) abgibt, solange PV das Haus nicht deckt."""
+def _net_kw(
+    profile_kw: list[float], forecast: list[tuple[datetime, float]], start: datetime, end: datetime
+) -> list[tuple[float, float]]:
+    """(Stundenanteil, PV − Haus in kW) je angebrochener Stunde in [start, end)."""
     pv = {p.replace(minute=0, second=0, microsecond=0): kw for p, kw in forecast}
-    total = 0.0
+    out = []
     t = start
     while t < end:
         hour = t.replace(minute=0, second=0, microsecond=0)
         nxt = min(end, hour + timedelta(hours=1))
-        total += max(0.0, profile_kw[t.hour] - pv.get(hour, 0.0)) * (nxt - t).total_seconds() / 3600
+        out.append(((nxt - t).total_seconds() / 3600, pv.get(hour, 0.0) - profile_kw[t.hour]))
         t = nxt
-    return total
+    return out
+
+
+def deficit(profile_kw: list[float], forecast: list[tuple[datetime, float]], start: datetime, end: datetime) -> float:
+    """Energie (kWh), die der Akku in [start, end) abgibt, solange PV das Haus nicht deckt."""
+    return sum(frac * max(0.0, -net) for frac, net in _net_kw(profile_kw, forecast, start, end))
+
+
+def surplus(profile_kw: list[float], forecast: list[tuple[datetime, float]], start: datetime, end: datetime) -> float:
+    """PV-Energie (kWh) über dem Hausverbrauch in [start, end), die in den Akku gehen kann."""
+    return sum(frac * max(0.0, net) for frac, net in _net_kw(profile_kw, forecast, start, end))
+
+
+def grid_charge_target(target_soc: float, pv_surplus_kwh: float, capacity_kwh: float) -> float:
+    """SoC, bis zu dem aus dem Netz geladen wird; den Rest bis zum Ziel bringt die PV im Fenster."""
+    return max(0.0, target_soc - pv_surplus_kwh / capacity_kwh * 100)
 
 
 def peak_charge_limit_w(pv_kw: float, ac_limit_kw: float, max_w: int, margin_w: int, step_w: int) -> int:

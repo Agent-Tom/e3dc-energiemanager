@@ -324,6 +324,33 @@ class TestChargePower(unittest.TestCase):
         self.assertEqual(p, 2800)
 
 
+class TestPvImFenster(unittest.TestCase):
+    # Mittagsfenster 12–16 Uhr, Haus 1 kW, sonniger Tag
+    PROGNOSE = [(dt(h), kw) for h, kw in [(12, 9.0), (13, 8.0), (14, 6.0), (15, 0.5)]]
+
+    def test_surplus(self):
+        profil = [1.0] * 24
+        self.assertAlmostEqual(planner.surplus(profil, self.PROGNOSE, dt(12), dt(16)), 8 + 7 + 5)
+        self.assertAlmostEqual(planner.surplus(profil, self.PROGNOSE, dt(13, 30), dt(16)), 3.5 + 5)
+        self.assertAlmostEqual(planner.surplus(profil, [], dt(12), dt(16)), 0.0)
+
+    def test_surplus_und_deficit_ergaenzen_sich(self):
+        profil = [1.0] * 24
+        pv = planner.pv_sum(self.PROGNOSE, dt(12), dt(16))
+        haus = planner.hourly_sum(profil, dt(12), dt(16))
+        bilanz = planner.surplus(profil, self.PROGNOSE, dt(12), dt(16)) - planner.deficit(
+            profil, self.PROGNOSE, dt(12), dt(16)
+        )
+        self.assertAlmostEqual(bilanz, pv - haus)
+
+    def test_grid_charge_target(self):
+        # 16,3 kWh PV-Überschuss = 50 % von 32,6 kWh
+        self.assertAlmostEqual(planner.grid_charge_target(55, 16.3, KAPAZITAET), 5.0)
+        self.assertEqual(planner.grid_charge_target(55, 0.0, KAPAZITAET), 55)
+        # PV deckt mehr als das Ziel: gar nicht aus dem Netz laden
+        self.assertEqual(planner.grid_charge_target(55, 40.0, KAPAZITAET), 0.0)
+
+
 class TestSommer(unittest.TestCase):
     # Sonniger Tag: Spitze von 11 bis 15 Uhr über der AC-Grenze von 12 kW
     PROGNOSE = [
