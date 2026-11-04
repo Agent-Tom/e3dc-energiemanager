@@ -74,7 +74,7 @@ def _ent(domain: str | list[str]) -> sel.EntitySelector:
     return sel.EntitySelector(sel.EntitySelectorConfig(domain=domain))
 
 
-def _num(mn: float, mx: float, step: float, unit: str | None = None) -> sel.NumberSelector:
+def _num(mn: float, mx: float, step: float | str, unit: str | None = None) -> sel.NumberSelector:
     return sel.NumberSelector(
         sel.NumberSelectorConfig(min=mn, max=mx, step=step, unit_of_measurement=unit, mode="box")
     )
@@ -115,7 +115,7 @@ def schema_tariff(cur: dict) -> vol.Schema:
             _opt(CONF_TARIFF_WINDOWS, cur, DEFAULT_TARIFF): sel.TextSelector(
                 sel.TextSelectorConfig(multiline=True)
             ),
-            _opt(CONF_PRICE_NORMAL, cur, DEFAULT_PRICE_NORMAL): _num(0, 2, 0.0001, "€/kWh"),
+            _opt(CONF_PRICE_NORMAL, cur, DEFAULT_PRICE_NORMAL): _num(0, 2, "any", "€/kWh"),
             _opt(CONF_BASE_FEE, cur, DEFAULT_BASE_FEE): _num(0, 200, 0.01, "€/Monat"),
             _opt(CONF_TARIFF_START, cur, DEFAULT_TARIFF_START): sel.DateSelector(),
         }
