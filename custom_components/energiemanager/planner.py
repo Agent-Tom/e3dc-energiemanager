@@ -495,3 +495,31 @@ def price_stats(
         round(batt, 3),
         round(loss, 4),
     )
+
+
+def price_history(
+    rows: list[tuple[datetime, float, float]],
+    windows: list[TariffWindow],
+    normal_price: float,
+    loss_pct: float,
+    period: str,
+) -> list[tuple[datetime, float, float]]:
+    """(Beginn, kWh Netzbezug, Ø ct/kWh mit Verlustaufschlag) je Tag, Monat oder Jahr.
+
+    period: "day", "month" oder "year"; Rechnung wie in price_stats, ohne Grundpreis.
+    """
+    groups: dict[datetime, list[float]] = {}
+    for t, e, b in rows:
+        if e <= 0:
+            continue
+        k = t.replace(hour=0, minute=0, second=0, microsecond=0)
+        if period in ("month", "year"):
+            k = k.replace(day=1)
+        if period == "year":
+            k = k.replace(month=1)
+        price = current_price(windows, t, normal_price)
+        b = min(max(b, 0.0), e)
+        g = groups.setdefault(k, [0.0, 0.0])
+        g[0] += e
+        g[1] += e * price + b * price * loss_pct / 100
+    return [(k, round(kwh, 1), round(cost / kwh * 100, 2)) for k, (kwh, cost) in sorted(groups.items())]

@@ -64,6 +64,8 @@ from .const import (
     EV_TOPUP_FROM_PCT,
     EV_TOPUP_POWER_FACTOR,
     POWER_MODE_REFRESH_S,
+    PRICE_HISTORY_DAYS,
+    PRICE_HISTORY_YEARS,
     PRICE_STATS_INTERVAL_MIN,
     SETTINGS_NUMBERS,
     SETTINGS_SWITCHES,
@@ -113,6 +115,7 @@ class EMState:
     profile_kw: list[float] = field(default_factory=list)
     price_stats: dict[str, planner.PriceStats | None] = field(default_factory=dict)  # day/month/year
     price_stats_at: datetime | None = None
+    price_history: dict[str, list[tuple[datetime, float, float]]] = field(default_factory=dict)
     t_history: float | None = None
     last_error: str | None = None
 
@@ -319,9 +322,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             "month": midnight.replace(day=1),
             "year": midnight.replace(month=1, day=1),
         }
-        first = max(starts["year"], tariff_start)
-        if first > now:
+        # Ab hier laden: genug für den Verlauf der Monate und Jahre
+        first = max(starts["year"].replace(year=starts["year"].year - PRICE_HISTORY_YEARS), tariff_start)
+        if max(starts["year"], tariff_start) > now:
             self.state.price_stats = {}
+            self.state.price_history = {}
             self.state.price_stats_at = now
             return
         hour = now.replace(minute=0, second=0, microsecond=0)
@@ -360,6 +365,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             else None
             for key, start in starts.items()
         }
+        hist = {
+            key: planner.price_history(rows, self.windows, self.normal_price, loss, key)
+            for key in ("day", "month", "year")
+        }
+        hist["day"] = hist["day"][-PRICE_HISTORY_DAYS:]
+        self.state.price_history = hist
         self.state.price_stats_at = now
 
     async def _async_load_temp_forecast(self, now: datetime) -> None:

@@ -533,6 +533,24 @@ class TestPreisStatistik(unittest.TestCase):
         # Höchstens der Netzbezug
         self.assertAlmostEqual(planner.grid_to_battery(2.0, 6.0, 0.0, 1.0), 2.0)
 
+    def test_price_history(self):
+        rows = [
+            (dt(3), 10.0, 0.0),
+            (dt(19), 5.0, 0.0),
+            (dt(3, tag=3), 4.0, 4.0),
+            (datetime(2026, 12, 1, 3), 2.0, 0.0),
+        ]
+        tage = planner.price_history(rows, self.w, 0.27, 10, "day")
+        self.assertEqual([t for t, _, _ in tage], [dt(0), dt(0, tag=3), datetime(2026, 12, 1)])
+        self.assertEqual(tage[0][1], 15.0)
+        self.assertAlmostEqual(tage[0][2], (1.8 + 1.75) / 15 * 100, places=2)
+        self.assertAlmostEqual(tage[1][2], 18 * 1.1, places=2)
+        monate = planner.price_history(rows, self.w, 0.27, 10, "month")
+        self.assertEqual([t for t, _, _ in monate], [datetime(2026, 11, 1), datetime(2026, 12, 1)])
+        self.assertEqual(monate[0][1], 19.0)
+        jahre = planner.price_history(rows, self.w, 0.27, 10, "year")
+        self.assertEqual(jahre, [(datetime(2026, 1, 1), 21.0, jahre[0][2])])
+
     def test_ohne_bezug(self):
         p = planner.price_stats([], dt(0), dt(6), self.w, 0.27, 21.04)
         self.assertIsNone(p.avg)

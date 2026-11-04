@@ -110,6 +110,9 @@ SETTINGS_SWITCHES: dict[str, bool] = {
 UPDATE_INTERVAL_S = 30
 # Durchschnittspreise aus der Recorder-Statistik so oft neu rechnen
 PRICE_STATS_INTERVAL_MIN = 15
+# Verlauf der Durchschnittspreise: so viele Tage, und Monate/Jahre ab diesem Jahresabstand
+PRICE_HISTORY_DAYS = 31
+PRICE_HISTORY_YEARS = 2
 POWER_MODE_REFRESH_S = 20
 WALLBOX_TOGGLE_COOLDOWN_S = 180
 # Erst ab dieser erwarteten Abregelungsenergie greift der Sommer-Modus

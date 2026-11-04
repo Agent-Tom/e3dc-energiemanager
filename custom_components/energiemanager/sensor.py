@@ -39,6 +39,10 @@ def _avg_attrs(key: str) -> Callable[[EMState, EnergyCoordinator], dict]:
         if p is None:
             return {}
         total = p.avg_total
+        verlauf = [
+            {"ts": int(t.timestamp() * 1000), "kwh": kwh, "ct": ct}
+            for t, kwh, ct in s.price_history.get(key, [])
+        ]
         return {
             "netzbezug_kwh": round(p.kwh, 1),
             "arbeitskosten_eur": round(p.cost, 2),
@@ -48,6 +52,7 @@ def _avg_attrs(key: str) -> Callable[[EMState, EnergyCoordinator], dict]:
             "kosten_gesamt_eur": round(p.cost + p.base_fee, 2),
             "mit_grundpreis_ct_kwh": round(total * 100, 2) if total is not None else None,
             "stand": s.price_stats_at.isoformat() if s.price_stats_at else None,
+            "verlauf": verlauf,
         }
 
     return attrs
@@ -168,6 +173,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class EMSensor(EMEntity, SensorEntity):
     entity_description: EMSensorDescription
+    # Der Preisverlauf steht schon in der Recorder-Statistik, nicht doppelt speichern
+    _unrecorded_attributes = frozenset({"verlauf"})
 
     def __init__(self, coordinator, description: EMSensorDescription):
         super().__init__(coordinator, description.key)
