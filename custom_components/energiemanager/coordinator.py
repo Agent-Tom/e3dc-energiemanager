@@ -15,9 +15,11 @@ from homeassistant.util import dt as dt_util
 from . import planner
 from .const import (
     CONF_CAPACITY,
+    CONF_BASE_FEE,
     CONF_E3DC_DEVICE,
     CONF_EV_MAX_SOC_SENSOR,
     CONF_EV_SOC_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
     CONF_HP_CURVE,
     CONF_HP_MODEL,
@@ -33,18 +35,22 @@ from .const import (
     CONF_SOC_SENSOR,
     CONF_SOLCAST_TODAY,
     CONF_SOLCAST_TOMORROW,
+    CONF_TARIFF_START,
     CONF_TARIFF_WINDOWS,
     CONF_WALLBOXES,
     CONF_WEATHER,
+    DEFAULT_BASE_FEE,
     DEFAULT_CAPACITY,
     DEFAULT_EV_MAX_SOC_SENSOR,
     DEFAULT_EV_SOC_SENSOR,
+    DEFAULT_GRID_IMPORT_SENSOR,
     DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_PRICE_NORMAL,
     DEFAULT_TARIFF,
+    DEFAULT_TARIFF_START,
     DOMAIN,
     EV_DEFAULT_POWER_KW,
     EV_EFFICIENCY,
@@ -52,6 +58,7 @@ from .const import (
     EV_TOPUP_FROM_PCT,
     EV_TOPUP_POWER_FACTOR,
     POWER_MODE_REFRESH_S,
+    PRICE_STATS_INTERVAL_MIN,
     SETTINGS_NUMBERS,
     SETTINGS_SWITCHES,
     SUMMER_CHARGE_MARGIN_W,
@@ -98,6 +105,8 @@ class EMState:
     wallbox_state: dict[str, str | None] = field(default_factory=dict)  # ausgesteckt/angeschlossen/laedt
     wallbox_ev: dict[str, dict[str, Any]] = field(default_factory=dict)  # Zielladung zur Anzeige
     profile_kw: list[float] = field(default_factory=list)
+    price_stats: dict[str, planner.PriceStats | None] = field(default_factory=dict)  # day/month/year
+    price_stats_at: datetime | None = None
     t_history: float | None = None
     last_error: str | None = None
 
@@ -138,6 +147,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self.cfg = cfg
         self.windows = planner.parse_tariff(cfg.get(CONF_TARIFF_WINDOWS, DEFAULT_TARIFF))
         self.normal_price = float(cfg.get(CONF_PRICE_NORMAL, DEFAULT_PRICE_NORMAL))
+        self.base_fee = float(cfg.get(CONF_BASE_FEE, DEFAULT_BASE_FEE))
+        self.tariff_start = date.fromisoformat(str(cfg.get(CONF_TARIFF_START) or DEFAULT_TARIFF_START))
+        self.grid_import_sensor = cfg.get(CONF_GRID_IMPORT_SENSOR, DEFAULT_GRID_IMPORT_SENSOR)
         self.capacity = float(cfg.get(CONF_CAPACITY, DEFAULT_CAPACITY))
         self.batt_max_charge = int(cfg.get(CONF_MAX_CHARGE_W, DEFAULT_MAX_CHARGE_W))
         self.batt_max_discharge = int(cfg.get(CONF_MAX_DISCHARGE_W, DEFAULT_MAX_DISCHARGE_W))
@@ -261,6 +273,64 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self.state.t_history = round(sum(temps) / len(temps), 1) if temps else None
         self._profile_at = now
 
+    async def _async_load_price_stats(self, now: datetime) -> None:
+        """Ø Strompreis für Tag, Monat und Jahr aus der Statistik des Netzbezugs.
+
+        Volle Stunden kommen aus der Stundenstatistik, die laufende Stunde aus der
+        5-Minuten-Statistik. Gerechnet wird mit dem eingestellten Tarif, frühestens
+        ab Tarifbeginn.
+        """
+        at = self.state.price_stats_at
+        if at and now - at < timedelta(minutes=PRICE_STATS_INTERVAL_MIN):
+            return
+        sensor = self.grid_import_sensor
+        if not sensor:
+            return
+        from homeassistant.components.recorder import get_instance
+        from homeassistant.components.recorder.statistics import statistics_during_period
+
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tariff_start = midnight.replace(
+            year=self.tariff_start.year, month=self.tariff_start.month, day=self.tariff_start.day
+        )
+        starts = {
+            "day": midnight,
+            "month": midnight.replace(day=1),
+            "year": midnight.replace(month=1, day=1),
+        }
+        first = max(starts["year"], tariff_start)
+        if first > now:
+            self.state.price_stats = {}
+            self.state.price_stats_at = now
+            return
+        hour = now.replace(minute=0, second=0, microsecond=0)
+        rec = get_instance(self.hass)
+        rows: list[tuple[datetime, float]] = []
+        try:
+            for period, a, b in (("hour", first, hour), ("5minute", max(first, hour), now)):
+                if a >= b:
+                    continue
+                stats = await rec.async_add_executor_job(
+                    statistics_during_period,
+                    self.hass, dt_util.as_utc(a), dt_util.as_utc(b), {sensor}, period, None, {"change"},
+                )
+                for row in stats.get(sensor, []):
+                    ts = row["start"]
+                    ts_dt = dt_util.utc_from_timestamp(ts) if isinstance(ts, (int, float)) else ts
+                    rows.append((dt_util.as_local(ts_dt), float(row.get("change") or 0.0)))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Statistik des Netzbezugs konnte nicht geladen werden: %s", err)
+            return
+        self.state.price_stats = {
+            key: planner.price_stats(
+                rows, max(start, tariff_start), now, self.windows, self.normal_price, self.base_fee
+            )
+            if max(start, tariff_start) <= now
+            else None
+            for key, start in starts.items()
+        }
+        self.state.price_stats_at = now
+
     async def _async_load_temp_forecast(self, now: datetime) -> None:
         if self._temp_fc_at and now - self._temp_fc_at < timedelta(minutes=30):
             return
@@ -309,6 +379,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         s.last_error = None
         await self._async_load_history(now)
         await self._async_load_temp_forecast(now)
+        await self._async_load_price_stats(now)
 
         s.level = planner.current_level(self.windows, now)
         s.price = planner.current_price(self.windows, now, self.normal_price)

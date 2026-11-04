@@ -20,6 +20,9 @@ CONF_OUTDOOR_TEMP = "outdoor_temp_sensor"
 # --- Tarif ---
 CONF_TARIFF_WINDOWS = "tariff_windows"
 CONF_PRICE_NORMAL = "price_normal"
+CONF_BASE_FEE = "base_fee"
+CONF_TARIFF_START = "tariff_start"
+CONF_GRID_IMPORT_SENSOR = "grid_import_sensor"
 
 # --- Wallboxen ---
 CONF_WALLBOXES = "wallboxes"
@@ -35,8 +38,11 @@ CONF_HP_CURVE = "hp_offset_curve"
 CONF_HP_MODEL = "hp_consumption_model"
 
 # --- Defaults (aus Thomas' Setup) ---
-DEFAULT_TARIFF = "02:00-06:00=low@0.18; 12:00-16:00=low@0.18; 18:00-21:00=high@0.35"
-DEFAULT_PRICE_NORMAL = 0.27
+DEFAULT_TARIFF = "02:00-06:00=low@0.1825; 12:00-16:00=low@0.1825; 18:00-21:00=high@0.3026"
+DEFAULT_PRICE_NORMAL = 0.2525
+DEFAULT_BASE_FEE = 21.04  # €/Monat
+DEFAULT_TARIFF_START = "2026-09-01"
+DEFAULT_GRID_IMPORT_SENSOR = "sensor.s10e_pro_consumption_from_grid_today"
 DEFAULT_CAPACITY = 32.6
 DEFAULT_MAX_CHARGE_W = 12000
 DEFAULT_MAX_DISCHARGE_W = 12000
@@ -95,6 +101,8 @@ SETTINGS_SWITCHES: dict[str, bool] = {
 }
 
 UPDATE_INTERVAL_S = 30
+# Durchschnittspreise aus der Recorder-Statistik so oft neu rechnen
+PRICE_STATS_INTERVAL_MIN = 15
 POWER_MODE_REFRESH_S = 20
 WALLBOX_TOGGLE_COOLDOWN_S = 180
 # Erst ab dieser erwarteten Abregelungsenergie greift der Sommer-Modus

@@ -40,7 +40,8 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 - PV-Prognose: Solcast, `sensor.solcast_pv_forecast_prognose_heute` / `_morgen`, Attribut `detailedHourly` mit `period_start`, `pv_estimate`, `pv_estimate10`, `pv_estimate90` (stündlicher Mittelwert in kW)
 
 **Tarif: Octopus Heat**
-- low 02–06 und 12–16 Uhr, high 18–21 Uhr, sonst normal
+- low 02–06 und 12–16 Uhr (18,25 ct), high 18–21 Uhr (30,26 ct), sonst normal (25,25 ct); Grundpreis 21,04 €/Monat; seit 01.09.2026, Vertrag bis 14.02.2028
+- Netzbezug-Zähler: `sensor.s10e_pro_consumption_from_grid_today` (kWh, total_increasing, täglicher Reset) – Grundlage der Ø-Strompreis-Sensoren
 
 **Wallboxen (E3DC, über `e3dc_rscp`)** – Präfixe `garage` und `carport`
 - `switch.<wb>_sun_mode`, `button.<wb>_toggle_charging`, `binary_sensor.<wb>_charging`, `binary_sensor.<wb>_plug`, `number.<wb>_max_charge_current`, `sensor.<wb>_phases`

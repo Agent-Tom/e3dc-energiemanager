@@ -21,7 +21,7 @@ planner = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = planner
 _spec.loader.exec_module(planner)
 
-# Entspricht DEFAULT_TARIFF in const.py (Octopus Heat)
+# Fenster wie DEFAULT_TARIFF in const.py (Octopus Heat), Preise gerundet
 OCTOPUS = "02:00-06:00=low@0.18; 12:00-16:00=low@0.18; 18:00-21:00=high@0.35"
 MODELL = (35.0, 54.3, 3.2, 8.0)
 KAPAZITAET = 32.6
@@ -489,6 +489,34 @@ class TestZielladung(unittest.TestCase):
         p = self.plan(dt(22), 0)
         self.assertFalse(p.charge_now)
         self.assertEqual(p.reason, "Ziel erreicht")
+
+
+
+class TestPreisStatistik(unittest.TestCase):
+    def setUp(self):
+        self.w = planner.parse_tariff(OCTOPUS)
+
+    def test_gewichtet_nach_bezug(self):
+        rows = [(dt(3), 10.0), (dt(10), 5.0), (dt(19), 5.0)]
+        p = planner.price_stats(rows, dt(0), dt(0, tag=3), self.w, 0.27, 0.0)
+        self.assertAlmostEqual(p.kwh, 20.0)
+        self.assertAlmostEqual(p.cost, 10 * 0.18 + 5 * 0.27 + 5 * 0.35)
+        self.assertAlmostEqual(p.avg, p.cost / 20)
+
+    def test_nur_ab_start_und_ohne_negative(self):
+        rows = [(dt(1), 10.0), (dt(3), 4.0), (dt(4), -1.0)]
+        p = planner.price_stats(rows, dt(2), dt(6), self.w, 0.27, 0.0)
+        self.assertAlmostEqual(p.kwh, 4.0)
+
+    def test_grundpreis_anteilig(self):
+        p = planner.price_stats([(dt(3), 10.0)], dt(0), dt(0, tag=3), self.w, 0.27, 30.4375)
+        self.assertAlmostEqual(p.base_fee, 1.0)
+        self.assertAlmostEqual(p.avg_total, (1.8 + 1.0) / 10)
+
+    def test_ohne_bezug(self):
+        p = planner.price_stats([], dt(0), dt(6), self.w, 0.27, 21.04)
+        self.assertIsNone(p.avg)
+        self.assertIsNone(p.avg_total)
 
 
 if __name__ == "__main__":

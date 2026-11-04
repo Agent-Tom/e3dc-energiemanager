@@ -428,3 +428,45 @@ def ev_plan(
     if start is None:
         return EvPlan(False, None, top, "Restladung kurz vor der Zielzeit")
     return EvPlan(False, start, top, "wartet auf günstigen Zeitraum")
+
+
+# ---------------------------------------------------------------- Strompreis-Statistik
+@dataclass(frozen=True)
+class PriceStats:
+    kwh: float
+    cost: float  # Arbeitspreis
+    base_fee: float  # anteiliger Grundpreis
+
+    @property
+    def avg(self) -> float | None:
+        """Ø Arbeitspreis je kWh Netzbezug."""
+        return self.cost / self.kwh if self.kwh > 0 else None
+
+    @property
+    def avg_total(self) -> float | None:
+        """Ø Preis je kWh Netzbezug einschließlich Grundpreis."""
+        return (self.cost + self.base_fee) / self.kwh if self.kwh > 0 else None
+
+
+def price_stats(
+    rows: list[tuple[datetime, float]],
+    start: datetime,
+    now: datetime,
+    windows: list[TariffWindow],
+    normal_price: float,
+    base_fee_month: float,
+) -> PriceStats:
+    """Netzbezug und Kosten ab `start`.
+
+    rows: (Beginn, kWh) je Abschnitt, stündlich oder feiner; jeder Abschnitt
+    kostet den Tarifpreis zu seinem Beginn. Der Grundpreis zählt anteilig nach
+    Zeit (Monatspreis × 12 / 365,25 je Tag).
+    """
+    kwh = cost = 0.0
+    for t, e in rows:
+        if t < start or e <= 0:
+            continue
+        kwh += e
+        cost += e * current_price(windows, t, normal_price)
+    days = max(0.0, (now - start).total_seconds() / 86400)
+    return PriceStats(round(kwh, 3), round(cost, 4), round(base_fee_month * 12 / 365.25 * days, 4))

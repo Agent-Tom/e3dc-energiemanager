@@ -11,10 +11,12 @@ from homeassistant.helpers import selector as sel
 
 from . import planner
 from .const import (
+    CONF_BASE_FEE,
     CONF_CAPACITY,
     CONF_E3DC_DEVICE,
     CONF_EV_MAX_SOC_SENSOR,
     CONF_EV_SOC_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
     CONF_HP_CURVE,
     CONF_HP_MODEL,
@@ -30,18 +32,22 @@ from .const import (
     CONF_SOC_SENSOR,
     CONF_SOLCAST_TODAY,
     CONF_SOLCAST_TOMORROW,
+    CONF_TARIFF_START,
     CONF_TARIFF_WINDOWS,
     CONF_WALLBOXES,
     CONF_WEATHER,
+    DEFAULT_BASE_FEE,
     DEFAULT_CAPACITY,
     DEFAULT_EV_MAX_SOC_SENSOR,
     DEFAULT_EV_SOC_SENSOR,
+    DEFAULT_GRID_IMPORT_SENSOR,
     DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_PRICE_NORMAL,
     DEFAULT_TARIFF,
+    DEFAULT_TARIFF_START,
     DEFAULT_WALLBOXES,
     DOMAIN,
 )
@@ -59,6 +65,7 @@ SUGGEST = {
     CONF_SG_SURPLUS_SENSOR: "sensor.s10e_pro_sg_ready",
     CONF_HP_OFFSET: "number.remko_mqtt_kalter_warmer",
     CONF_EV_SOC_SENSOR: DEFAULT_EV_SOC_SENSOR,
+    CONF_GRID_IMPORT_SENSOR: DEFAULT_GRID_IMPORT_SENSOR,
     CONF_EV_MAX_SOC_SENSOR: DEFAULT_EV_MAX_SOC_SENSOR,
 }
 
@@ -90,6 +97,7 @@ def schema_basic(cur: dict) -> vol.Schema:
             _opt(CONF_SOC_SENSOR, cur): _ent("sensor"),
             _opt(CONF_HOUSE_POWER_SENSOR, cur): _ent("sensor"),
             _opt(CONF_PV_POWER_SENSOR, cur, required=False): _ent("sensor"),
+            _opt(CONF_GRID_IMPORT_SENSOR, cur, required=False): _ent("sensor"),
             _opt(CONF_CAPACITY, cur, DEFAULT_CAPACITY): _num(1, 200, 0.1, "kWh"),
             _opt(CONF_MAX_CHARGE_W, cur, DEFAULT_MAX_CHARGE_W): _num(500, 30000, 100, "W"),
             _opt(CONF_MAX_DISCHARGE_W, cur, DEFAULT_MAX_DISCHARGE_W): _num(500, 30000, 100, "W"),
@@ -107,7 +115,9 @@ def schema_tariff(cur: dict) -> vol.Schema:
             _opt(CONF_TARIFF_WINDOWS, cur, DEFAULT_TARIFF): sel.TextSelector(
                 sel.TextSelectorConfig(multiline=True)
             ),
-            _opt(CONF_PRICE_NORMAL, cur, DEFAULT_PRICE_NORMAL): _num(0, 2, 0.001, "€/kWh"),
+            _opt(CONF_PRICE_NORMAL, cur, DEFAULT_PRICE_NORMAL): _num(0, 2, 0.0001, "€/kWh"),
+            _opt(CONF_BASE_FEE, cur, DEFAULT_BASE_FEE): _num(0, 200, 0.01, "€/Monat"),
+            _opt(CONF_TARIFF_START, cur, DEFAULT_TARIFF_START): sel.DateSelector(),
         }
     )
 

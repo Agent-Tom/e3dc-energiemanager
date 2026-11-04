@@ -23,7 +23,8 @@
           "solcast_today": "Solcast-Prognose heute",
           "solcast_tomorrow": "Solcast-Prognose morgen",
           "weather_entity": "Wetter-Entität (stündliche Vorhersage)",
-          "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)"
+          "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)",
+          "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)"
         }
       },
       "tariff": {
@@ -31,7 +32,9 @@
         "description": "Ein Fenster je Eintrag, getrennt durch ';' oder Zeilenumbruch: START-ENDE=stufe@preis. Stufen: low, normal, high. Zeiten außerhalb der Fenster gelten als 'normal'.",
         "data": {
           "tariff_windows": "Tarif-Fenster",
-          "price_normal": "Preis Normaltarif"
+          "price_normal": "Preis Normaltarif",
+          "base_fee": "Grundpreis",
+          "tariff_start": "Tarif gilt ab"
         }
       },
       "devices": {
@@ -66,7 +69,9 @@
         "description": "Ein Fenster je Eintrag, getrennt durch ';' oder Zeilenumbruch: START-ENDE=stufe@preis. Stufen: low, normal, high. Zeiten außerhalb der Fenster gelten als 'normal'.",
         "data": {
           "tariff_windows": "Tarif-Fenster",
-          "price_normal": "Preis Normaltarif"
+          "price_normal": "Preis Normaltarif",
+          "base_fee": "Grundpreis",
+          "tariff_start": "Tarif gilt ab"
         }
       },
       "devices": {
@@ -97,7 +102,8 @@
           "solcast_today": "Solcast-Prognose heute",
           "solcast_tomorrow": "Solcast-Prognose morgen",
           "weather_entity": "Wetter-Entität (stündliche Vorhersage)",
-          "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)"
+          "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)",
+          "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)"
         }
       }
     },
@@ -149,6 +155,15 @@
           "angeschlossen": "Angeschlossen",
           "laedt": "Lädt"
         }
+      },
+      "price_avg_day": {
+        "name": "Ø Strompreis heute"
+      },
+      "price_avg_month": {
+        "name": "Ø Strompreis Monat"
+      },
+      "price_avg_year": {
+        "name": "Ø Strompreis Jahr"
       }
     },
     "switch": {

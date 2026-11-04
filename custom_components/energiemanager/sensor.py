@@ -28,6 +28,29 @@ class EMSensorDescription(SensorEntityDescription):
     attrs: Callable[[EMState, EnergyCoordinator], dict] | None = None
 
 
+def _avg_ct(s: EMState, key: str) -> float | None:
+    p = s.price_stats.get(key)
+    return round(p.avg * 100, 2) if p and p.avg is not None else None
+
+
+def _avg_attrs(key: str) -> Callable[[EMState, EnergyCoordinator], dict]:
+    def attrs(s: EMState, c: EnergyCoordinator) -> dict:
+        p = s.price_stats.get(key)
+        if p is None:
+            return {}
+        total = p.avg_total
+        return {
+            "netzbezug_kwh": round(p.kwh, 1),
+            "arbeitskosten_eur": round(p.cost, 2),
+            "grundpreis_eur": round(p.base_fee, 2),
+            "kosten_gesamt_eur": round(p.cost + p.base_fee, 2),
+            "mit_grundpreis_ct_kwh": round(total * 100, 2) if total is not None else None,
+            "stand": s.price_stats_at.isoformat() if s.price_stats_at else None,
+        }
+
+    return attrs
+
+
 def _plan_attrs(s: EMState, c: EnergyCoordinator) -> dict:
     p = _plan(s)
     if p is None:
@@ -59,6 +82,17 @@ SENSORS: tuple[EMSensorDescription, ...] = (
         native_unit_of_measurement="EUR/kWh",
         suggested_display_precision=3,
         value=lambda s: s.price,
+    ),
+    *(
+        EMSensorDescription(
+            key=f"price_avg_{key}",
+            native_unit_of_measurement="ct/kWh",
+            suggested_display_precision=2,
+            state_class=SensorStateClass.MEASUREMENT,
+            value=lambda s, key=key: _avg_ct(s, key),
+            attrs=_avg_attrs(key),
+        )
+        for key in ("day", "month", "year")
     ),
     EMSensorDescription(
         key="target_soc",
