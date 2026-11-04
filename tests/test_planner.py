@@ -497,21 +497,41 @@ class TestPreisStatistik(unittest.TestCase):
         self.w = planner.parse_tariff(OCTOPUS)
 
     def test_gewichtet_nach_bezug(self):
-        rows = [(dt(3), 10.0), (dt(10), 5.0), (dt(19), 5.0)]
+        rows = [(dt(3), 10.0, 0.0), (dt(10), 5.0, 0.0), (dt(19), 5.0, 0.0)]
         p = planner.price_stats(rows, dt(0), dt(0, tag=3), self.w, 0.27, 0.0)
         self.assertAlmostEqual(p.kwh, 20.0)
         self.assertAlmostEqual(p.cost, 10 * 0.18 + 5 * 0.27 + 5 * 0.35)
         self.assertAlmostEqual(p.avg, p.cost / 20)
 
     def test_nur_ab_start_und_ohne_negative(self):
-        rows = [(dt(1), 10.0), (dt(3), 4.0), (dt(4), -1.0)]
+        rows = [(dt(1), 10.0, 0.0), (dt(3), 4.0, 0.0), (dt(4), -1.0, 0.0)]
         p = planner.price_stats(rows, dt(2), dt(6), self.w, 0.27, 0.0)
         self.assertAlmostEqual(p.kwh, 4.0)
 
     def test_grundpreis_anteilig(self):
-        p = planner.price_stats([(dt(3), 10.0)], dt(0), dt(0, tag=3), self.w, 0.27, 30.4375)
+        p = planner.price_stats([(dt(3), 10.0, 0.0)], dt(0), dt(0, tag=3), self.w, 0.27, 30.4375)
         self.assertAlmostEqual(p.base_fee, 1.0)
         self.assertAlmostEqual(p.avg_total, (1.8 + 1.0) / 10)
+
+    def test_verlustaufschlag_nur_auf_akkuanteil(self):
+        # 10 kWh im Niedrigtarif, davon 6 kWh in den Akku: 10 % Aufschlag auf 6 kWh
+        p = planner.price_stats([(dt(3), 10.0, 6.0)], dt(0), dt(6), self.w, 0.27, 0.0, 10)
+        self.assertAlmostEqual(p.cost, 1.8)
+        self.assertAlmostEqual(p.battery_kwh, 6.0)
+        self.assertAlmostEqual(p.loss_cost, 6 * 0.18 * 0.1)
+        self.assertAlmostEqual(p.avg, (1.8 + 0.108) / 10)
+        # Der Akkuanteil kann den Netzbezug nicht übersteigen
+        p = planner.price_stats([(dt(3), 2.0, 5.0)], dt(0), dt(6), self.w, 0.27, 0.0, 10)
+        self.assertAlmostEqual(p.battery_kwh, 2.0)
+
+    def test_grid_to_battery(self):
+        # Kein PV: alles, was der Akku lädt, kommt aus dem Netz
+        self.assertAlmostEqual(planner.grid_to_battery(5.0, 3.0, 0.0, 2.0), 3.0)
+        # PV-Überschuss lädt zuerst
+        self.assertAlmostEqual(planner.grid_to_battery(1.0, 3.0, 4.0, 2.0), 1.0)
+        self.assertAlmostEqual(planner.grid_to_battery(0.5, 1.0, 4.0, 2.0), 0.0)
+        # Höchstens der Netzbezug
+        self.assertAlmostEqual(planner.grid_to_battery(2.0, 6.0, 0.0, 1.0), 2.0)
 
     def test_ohne_bezug(self):
         p = planner.price_stats([], dt(0), dt(6), self.w, 0.27, 21.04)

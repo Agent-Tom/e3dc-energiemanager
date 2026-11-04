@@ -23,6 +23,9 @@ CONF_PRICE_NORMAL = "price_normal"
 CONF_BASE_FEE = "base_fee"
 CONF_TARIFF_START = "tariff_start"
 CONF_GRID_IMPORT_SENSOR = "grid_import_sensor"
+CONF_BATTERY_CHARGE_ENERGY_SENSOR = "battery_charge_energy_sensor"
+CONF_PV_ENERGY_SENSOR = "pv_energy_sensor"
+CONF_HOUSE_ENERGY_SENSOR = "house_energy_sensor"
 
 # --- Wallboxen ---
 CONF_WALLBOXES = "wallboxes"
@@ -43,6 +46,9 @@ DEFAULT_PRICE_NORMAL = 0.2525
 DEFAULT_BASE_FEE = 21.04  # €/Monat
 DEFAULT_TARIFF_START = "2026-09-01"
 DEFAULT_GRID_IMPORT_SENSOR = "sensor.s10e_pro_consumption_from_grid_today"
+DEFAULT_BATTERY_CHARGE_ENERGY_SENSOR = "sensor.s10e_pro_battery_charge_today"
+DEFAULT_PV_ENERGY_SENSOR = "sensor.s10e_pro_solar_production_today"
+DEFAULT_HOUSE_ENERGY_SENSOR = "sensor.s10e_pro_house_consumption_today"
 DEFAULT_CAPACITY = 32.6
 DEFAULT_MAX_CHARGE_W = 12000
 DEFAULT_MAX_DISCHARGE_W = 12000
@@ -83,6 +89,7 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
     "hp_boost_k": (2, 0, 5, 0.5, "K"),
     "ev_capacity_kwh": (90, 10, 200, 1, "kWh"),
+    "battery_loss_pct": (10, 0, 30, 1, "%"),
     "history_days": (14, 3, 60, 1, "d"),
 }
 

@@ -42,6 +42,8 @@ def _avg_attrs(key: str) -> Callable[[EMState, EnergyCoordinator], dict]:
         return {
             "netzbezug_kwh": round(p.kwh, 1),
             "arbeitskosten_eur": round(p.cost, 2),
+            "ueber_akku_kwh": round(p.battery_kwh, 1),
+            "verlustaufschlag_eur": round(p.loss_cost, 2),
             "grundpreis_eur": round(p.base_fee, 2),
             "kosten_gesamt_eur": round(p.cost + p.base_fee, 2),
             "mit_grundpreis_ct_kwh": round(total * 100, 2) if total is not None else None,

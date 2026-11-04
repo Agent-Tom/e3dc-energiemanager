@@ -16,10 +16,12 @@ from . import planner
 from .const import (
     CONF_CAPACITY,
     CONF_BASE_FEE,
+    CONF_BATTERY_CHARGE_ENERGY_SENSOR,
     CONF_E3DC_DEVICE,
     CONF_EV_MAX_SOC_SENSOR,
     CONF_EV_SOC_SENSOR,
     CONF_GRID_IMPORT_SENSOR,
+    CONF_HOUSE_ENERGY_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
     CONF_HP_CURVE,
     CONF_HP_MODEL,
@@ -28,6 +30,7 @@ from .const import (
     CONF_MAX_DISCHARGE_W,
     CONF_OUTDOOR_TEMP,
     CONF_PRICE_NORMAL,
+    CONF_PV_ENERGY_SENSOR,
     CONF_PV_POWER_SENSOR,
     CONF_SG1,
     CONF_SG2,
@@ -40,15 +43,18 @@ from .const import (
     CONF_WALLBOXES,
     CONF_WEATHER,
     DEFAULT_BASE_FEE,
+    DEFAULT_BATTERY_CHARGE_ENERGY_SENSOR,
     DEFAULT_CAPACITY,
     DEFAULT_EV_MAX_SOC_SENSOR,
     DEFAULT_EV_SOC_SENSOR,
     DEFAULT_GRID_IMPORT_SENSOR,
+    DEFAULT_HOUSE_ENERGY_SENSOR,
     DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_PRICE_NORMAL,
+    DEFAULT_PV_ENERGY_SENSOR,
     DEFAULT_TARIFF,
     DEFAULT_TARIFF_START,
     DOMAIN,
@@ -123,6 +129,11 @@ def _f(hass: HomeAssistant, entity_id: str | None, default: float | None = None)
         return default
 
 
+def _changes(rows: list[dict[str, Any]]) -> dict[Any, float]:
+    """Statistikzeilen → {Beginn: Änderung}."""
+    return {r["start"]: float(r.get("change") or 0.0) for r in rows}
+
+
 def _kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
     """Leistung in kW, egal ob Sensor W oder kW liefert."""
     val = _f(hass, entity_id)
@@ -150,6 +161,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self.base_fee = float(cfg.get(CONF_BASE_FEE, DEFAULT_BASE_FEE))
         self.tariff_start = date.fromisoformat(str(cfg.get(CONF_TARIFF_START) or DEFAULT_TARIFF_START))
         self.grid_import_sensor = cfg.get(CONF_GRID_IMPORT_SENSOR, DEFAULT_GRID_IMPORT_SENSOR)
+        # Energiezähler für den Netzanteil der Akkuladung (Wandlungsverluste)
+        self.balance_sensors = {
+            "battery": cfg.get(CONF_BATTERY_CHARGE_ENERGY_SENSOR, DEFAULT_BATTERY_CHARGE_ENERGY_SENSOR),
+            "pv": cfg.get(CONF_PV_ENERGY_SENSOR, DEFAULT_PV_ENERGY_SENSOR),
+            "house": cfg.get(CONF_HOUSE_ENERGY_SENSOR, DEFAULT_HOUSE_ENERGY_SENSOR),
+        }
         self.capacity = float(cfg.get(CONF_CAPACITY, DEFAULT_CAPACITY))
         self.batt_max_charge = int(cfg.get(CONF_MAX_CHARGE_W, DEFAULT_MAX_CHARGE_W))
         self.batt_max_discharge = int(cfg.get(CONF_MAX_DISCHARGE_W, DEFAULT_MAX_DISCHARGE_W))
@@ -201,6 +218,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
 
     async def async_set_setting(self, key: str, value: Any) -> None:
         self.settings[key] = value
+        if key == "battery_loss_pct":
+            self.state.price_stats_at = None
         if key == "simulation":
             # Beim Umschalten alles neu senden, sonst gilt der simulierte Stand als gesendet
             self._applied_cmd = None
@@ -278,7 +297,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
 
         Volle Stunden kommen aus der Stundenstatistik, die laufende Stunde aus der
         5-Minuten-Statistik. Gerechnet wird mit dem eingestellten Tarif, frühestens
-        ab Tarifbeginn.
+        ab Tarifbeginn. Netzstrom, der über den Hausakku geht, bekommt einen
+        Aufschlag für die Wandlungsverluste; den Anteil liefert die Bilanz aus
+        Akkuladung, PV und Hausverbrauch je Abschnitt.
         """
         at = self.state.price_stats_at
         if at and now - at < timedelta(minutes=PRICE_STATS_INTERVAL_MIN):
@@ -305,25 +326,35 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             return
         hour = now.replace(minute=0, second=0, microsecond=0)
         rec = get_instance(self.hass)
-        rows: list[tuple[datetime, float]] = []
+        ids = {sensor} | {e for e in self.balance_sensors.values() if e}
+        rows: list[tuple[datetime, float, float]] = []
         try:
             for period, a, b in (("hour", first, hour), ("5minute", max(first, hour), now)):
                 if a >= b:
                     continue
                 stats = await rec.async_add_executor_job(
                     statistics_during_period,
-                    self.hass, dt_util.as_utc(a), dt_util.as_utc(b), {sensor}, period, None, {"change"},
+                    self.hass, dt_util.as_utc(a), dt_util.as_utc(b), ids, period, None, {"change"},
                 )
-                for row in stats.get(sensor, []):
-                    ts = row["start"]
+                by_start: dict[str, dict[Any, float]] = {
+                    key: _changes(stats.get(ent, [])) for key, ent in self.balance_sensors.items() if ent
+                }
+                for ts, grid in _changes(stats.get(sensor, [])).items():
+                    batt = planner.grid_to_battery(
+                        grid,
+                        by_start.get("battery", {}).get(ts, 0.0),
+                        by_start.get("pv", {}).get(ts, 0.0),
+                        by_start.get("house", {}).get(ts, 0.0),
+                    )
                     ts_dt = dt_util.utc_from_timestamp(ts) if isinstance(ts, (int, float)) else ts
-                    rows.append((dt_util.as_local(ts_dt), float(row.get("change") or 0.0)))
+                    rows.append((dt_util.as_local(ts_dt), grid, batt))
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Statistik des Netzbezugs konnte nicht geladen werden: %s", err)
             return
+        loss = float(self.settings["battery_loss_pct"])
         self.state.price_stats = {
             key: planner.price_stats(
-                rows, max(start, tariff_start), now, self.windows, self.normal_price, self.base_fee
+                rows, max(start, tariff_start), now, self.windows, self.normal_price, self.base_fee, loss
             )
             if max(start, tariff_start) <= now
             else None

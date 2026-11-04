@@ -24,7 +24,10 @@
           "solcast_tomorrow": "Solcast-Prognose morgen",
           "weather_entity": "Wetter-Entität (stündliche Vorhersage)",
           "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)",
-          "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)"
+          "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)",
+          "battery_charge_energy_sensor": "Akkuladung (Energiezähler kWh, für Wandlungsverluste)",
+          "pv_energy_sensor": "PV-Erzeugung (Energiezähler kWh, für Wandlungsverluste)",
+          "house_energy_sensor": "Hausverbrauch (Energiezähler kWh, für Wandlungsverluste)"
         }
       },
       "tariff": {
@@ -103,7 +106,10 @@
           "solcast_tomorrow": "Solcast-Prognose morgen",
           "weather_entity": "Wetter-Entität (stündliche Vorhersage)",
           "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)",
-          "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)"
+          "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)",
+          "battery_charge_energy_sensor": "Akkuladung (Energiezähler kWh, für Wandlungsverluste)",
+          "pv_energy_sensor": "PV-Erzeugung (Energiezähler kWh, für Wandlungsverluste)",
+          "house_energy_sensor": "Hausverbrauch (Energiezähler kWh, für Wandlungsverluste)"
         }
       }
     },
@@ -249,6 +255,9 @@
       },
       "ev_capacity_kwh": {
         "name": "E-Auto: Akkukapazität"
+      },
+      "battery_loss_pct": {
+        "name": "Wandlungsverluste Hausakku"
       }
     },
     "select": {

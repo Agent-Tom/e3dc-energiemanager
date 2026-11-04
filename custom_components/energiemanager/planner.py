@@ -434,39 +434,64 @@ def ev_plan(
 @dataclass(frozen=True)
 class PriceStats:
     kwh: float
-    cost: float  # Arbeitspreis
+    cost: float  # Arbeitspreis, tatsächlich bezahlt
     base_fee: float  # anteiliger Grundpreis
+    battery_kwh: float = 0.0  # davon aus dem Netz in den Hausakku
+    loss_cost: float = 0.0  # Aufschlag für die Wandlungsverluste dieses Anteils
 
     @property
     def avg(self) -> float | None:
-        """Ø Arbeitspreis je kWh Netzbezug."""
-        return self.cost / self.kwh if self.kwh > 0 else None
+        """Ø Arbeitspreis je kWh Netzbezug, mit Verlustaufschlag."""
+        return (self.cost + self.loss_cost) / self.kwh if self.kwh > 0 else None
 
     @property
     def avg_total(self) -> float | None:
-        """Ø Preis je kWh Netzbezug einschließlich Grundpreis."""
-        return (self.cost + self.base_fee) / self.kwh if self.kwh > 0 else None
+        """Ø Preis je kWh Netzbezug mit Verlustaufschlag und Grundpreis."""
+        return (self.cost + self.loss_cost + self.base_fee) / self.kwh if self.kwh > 0 else None
+
+
+def grid_to_battery(grid_kwh: float, battery_charge_kwh: float, pv_kwh: float, house_kwh: float) -> float:
+    """Netzenergie, die in einem Abschnitt in den Hausakku geflossen ist.
+
+    PV deckt zuerst das Haus, ihr Überschuss lädt den Akku; was der Akku darüber
+    hinaus lädt, kommt aus dem Netz, höchstens der Netzbezug des Abschnitts.
+    """
+    pv_surplus = max(0.0, pv_kwh - house_kwh)
+    return max(0.0, min(grid_kwh, battery_charge_kwh - pv_surplus))
 
 
 def price_stats(
-    rows: list[tuple[datetime, float]],
+    rows: list[tuple[datetime, float, float]],
     start: datetime,
     now: datetime,
     windows: list[TariffWindow],
     normal_price: float,
     base_fee_month: float,
+    loss_pct: float = 0.0,
 ) -> PriceStats:
     """Netzbezug und Kosten ab `start`.
 
-    rows: (Beginn, kWh) je Abschnitt, stündlich oder feiner; jeder Abschnitt
-    kostet den Tarifpreis zu seinem Beginn. Der Grundpreis zählt anteilig nach
-    Zeit (Monatspreis × 12 / 365,25 je Tag).
+    rows: (Beginn, kWh Netzbezug, kWh davon in den Hausakku) je Abschnitt,
+    stündlich oder feiner; jeder Abschnitt kostet den Tarifpreis zu seinem
+    Beginn. Der Anteil über den Akku bekommt `loss_pct` Prozent Aufschlag für
+    die Wandlungsverluste. Der Grundpreis zählt anteilig nach Zeit
+    (Monatspreis × 12 / 365,25 je Tag).
     """
-    kwh = cost = 0.0
-    for t, e in rows:
+    kwh = cost = batt = loss = 0.0
+    for t, e, b in rows:
         if t < start or e <= 0:
             continue
+        price = current_price(windows, t, normal_price)
+        b = min(max(b, 0.0), e)
         kwh += e
-        cost += e * current_price(windows, t, normal_price)
+        cost += e * price
+        batt += b
+        loss += b * price * loss_pct / 100
     days = max(0.0, (now - start).total_seconds() / 86400)
-    return PriceStats(round(kwh, 3), round(cost, 4), round(base_fee_month * 12 / 365.25 * days, 4))
+    return PriceStats(
+        round(kwh, 3),
+        round(cost, 4),
+        round(base_fee_month * 12 / 365.25 * days, 4),
+        round(batt, 3),
+        round(loss, 4),
+    )
