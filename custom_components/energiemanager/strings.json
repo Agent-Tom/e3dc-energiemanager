@@ -36,7 +36,7 @@
       },
       "devices": {
         "title": "Wallboxen und Wärmepumpe",
-        "description": "Wallboxen: Namenspräfixe der E3DC-RSCP-Wallboxen, kommagetrennt (z. B. 'garage, carport' für switch.garage_sun_mode usw.). Kurve: unter Schwelle °C → Anhebung K. Modell: Tagesverbrauch = base + max(min, a − b·T).",
+        "description": "Wallboxen: Namenspräfixe der E3DC-RSCP-Wallboxen, kommagetrennt (z. B. 'garage, carport' für switch.garage_sun_mode usw.). Die E-Auto-Sensoren braucht die Zielladung nach Ladestand. Kurve: unter Schwelle °C → Anhebung K. Modell: Tagesverbrauch = base + max(min, a − b·T).",
         "data": {
           "wallboxes": "Wallboxen",
           "sg_ready_1_switch": "SG-Ready Kontakt 1",
@@ -44,7 +44,9 @@
           "sg_surplus_sensor": "E3DC SG-Ready-Sensor (PV-Überschuss)",
           "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
           "hp_offset_curve": "Anhebungskurve",
-          "hp_consumption_model": "Verbrauchsmodell Wärmepumpe"
+          "hp_consumption_model": "Verbrauchsmodell Wärmepumpe",
+          "ev_soc_sensor": "E-Auto: Ladestand-Sensor (optional)",
+          "ev_max_soc_sensor": "E-Auto: Ladelimit-Sensor (optional)"
         }
       }
     }
@@ -69,7 +71,7 @@
       },
       "devices": {
         "title": "Wallboxen und Wärmepumpe",
-        "description": "Wallboxen: Namenspräfixe der E3DC-RSCP-Wallboxen, kommagetrennt (z. B. 'garage, carport' für switch.garage_sun_mode usw.). Kurve: unter Schwelle °C → Anhebung K. Modell: Tagesverbrauch = base + max(min, a − b·T).",
+        "description": "Wallboxen: Namenspräfixe der E3DC-RSCP-Wallboxen, kommagetrennt (z. B. 'garage, carport' für switch.garage_sun_mode usw.). Die E-Auto-Sensoren braucht die Zielladung nach Ladestand. Kurve: unter Schwelle °C → Anhebung K. Modell: Tagesverbrauch = base + max(min, a − b·T).",
         "data": {
           "wallboxes": "Wallboxen",
           "sg_ready_1_switch": "SG-Ready Kontakt 1",
@@ -77,7 +79,9 @@
           "sg_surplus_sensor": "E3DC SG-Ready-Sensor (PV-Überschuss)",
           "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
           "hp_offset_curve": "Anhebungskurve",
-          "hp_consumption_model": "Verbrauchsmodell Wärmepumpe"
+          "hp_consumption_model": "Verbrauchsmodell Wärmepumpe",
+          "ev_soc_sensor": "E-Auto: Ladestand-Sensor (optional)",
+          "ev_max_soc_sensor": "E-Auto: Ladelimit-Sensor (optional)"
         }
       },
       "basic": {
@@ -137,6 +141,14 @@
       },
       "consumption_profile": {
         "name": "Verbrauchsprofil Mittel"
+      },
+      "wallbox_state": {
+        "name": "Wallbox {wallbox} Status",
+        "state": {
+          "ausgesteckt": "Ausgesteckt",
+          "angeschlossen": "Angeschlossen",
+          "laedt": "Lädt"
+        }
       }
     },
     "switch": {
@@ -169,6 +181,9 @@
       },
       "hp_block_in_high": {
         "name": "Wärmepumpe im Hochtarif sperren"
+      },
+      "ev_target": {
+        "name": "Wallbox {wallbox} Zielladung"
       }
     },
     "number": {
@@ -210,6 +225,15 @@
       },
       "history_days": {
         "name": "Verbrauchshistorie"
+      },
+      "ev_soc": {
+        "name": "Wallbox {wallbox} Ziel-Ladestand"
+      },
+      "ev_kwh": {
+        "name": "Wallbox {wallbox} Ziel-Energie"
+      },
+      "ev_capacity_kwh": {
+        "name": "E-Auto: Akkukapazität"
       }
     },
     "select": {
@@ -219,8 +243,21 @@
           "aus": "Aus",
           "netzladen": "Sofort laden (Netz)",
           "niedrigtarif": "Nur Niedrigtarif",
+          "nur_pv": "Nur PV-Überschuss",
           "ueberschuss_niedrigtarif": "PV-Überschuss + Niedrigtarif"
         }
+      },
+      "ev_type": {
+        "name": "Wallbox {wallbox} Zielart",
+        "state": {
+          "ladestand": "Ladestand (%)",
+          "energie": "Energie (kWh)"
+        }
+      }
+    },
+    "time": {
+      "ev_time": {
+        "name": "Wallbox {wallbox} fertig um"
       }
     }
   }

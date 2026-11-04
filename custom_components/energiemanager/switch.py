@@ -14,6 +14,7 @@ CONFIG_SWITCHES = {"pv_p10", "hp_sg_on_surplus", "hp_block_in_high"}
 async def async_setup_entry(hass, entry, async_add_entities):
     coord = entry.runtime_data
     async_add_entities(EMSwitch(coord, key) for key in SETTINGS_SWITCHES)
+    async_add_entities(EvTargetSwitch(coord, wb) for wb in coord.wallboxes)
 
 
 class EMSwitch(EMEntity, SwitchEntity, RestoreEntity):
@@ -38,4 +39,32 @@ class EMSwitch(EMEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         await self.coordinator.async_set_setting(self._key, False)
+        self.async_write_ha_state()
+
+
+class EvTargetSwitch(EMEntity, SwitchEntity, RestoreEntity):
+    """Zielladung je Wallbox ein/aus; gilt jeden Tag, solange sie an ist."""
+
+    def __init__(self, coordinator, wb: str):
+        super().__init__(coordinator, f"ev_target_{wb}")
+        self._wb = wb
+        self._attr_translation_key = "ev_target"
+        self._attr_translation_placeholders = {"wallbox": wb.capitalize()}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in ("on", "off"):
+            self.coordinator.ev[self._wb]["ev_target"] = last.state == "on"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.ev[self._wb]["ev_target"])
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self.coordinator.async_set_ev(self._wb, "ev_target", True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self.coordinator.async_set_ev(self._wb, "ev_target", False)
         self.async_write_ha_state()

@@ -357,3 +357,74 @@ def parse_model(text: str) -> tuple[float, float, float, float]:
     if len(vals) != 4:
         raise ValueError("Modell braucht 4 Werte: base, a, b, min")
     return tuple(vals)  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------- E-Auto
+EV_SLOT = timedelta(minutes=15)
+
+
+def next_deadline(now: datetime, at: time) -> datetime:
+    """Nächster Zeitpunkt mit der Uhrzeit `at` nach `now` (heute oder morgen)."""
+    d = now.replace(hour=at.hour, minute=at.minute, second=0, microsecond=0)
+    return d if d > now else d + timedelta(days=1)
+
+
+@dataclass(frozen=True)
+class EvPlan:
+    charge_now: bool
+    start: datetime | None  # erster geplanter Block der Hauptladung
+    top_start: datetime | None  # Beginn der Restladung vor der Zielzeit
+    reason: str
+
+
+def ev_plan(
+    now: datetime,
+    deadline: datetime,
+    bulk_kwh: float,
+    top_kwh: float,
+    power_kw: float,
+    top_power_kw: float,
+    windows: list[TariffWindow],
+    normal_price: float,
+    buffer: timedelta = timedelta(0),
+) -> EvPlan:
+    """Zielladung: Hauptmenge in den günstigsten 15-Minuten-Blöcken, bei gleichem
+    Preis in den spätesten; die Restmenge (top) direkt vor der Zielzeit.
+
+    Wird in jedem Zyklus neu gerechnet. Weil die spätesten Blöcke gewählt werden,
+    rutscht der laufende Block erst in die Auswahl, wenn er gebraucht wird.
+    """
+    if bulk_kwh <= 0 and top_kwh <= 0:
+        return EvPlan(False, None, None, "Ziel erreicht")
+    end = deadline - buffer
+    top_start = end - timedelta(hours=top_kwh / top_power_kw) if top_kwh > 0 else end
+    top = top_start if top_kwh > 0 else None
+    if now >= top_start:
+        reason = "Restladung bis zur Zielzeit" if bulk_kwh <= 0 else "Zeit knapp: lädt durchgehend"
+        return EvPlan(True, None, top, reason)
+
+    # Blöcke bis zum Beginn der Restladung; der erste und letzte nur anteilig
+    slots: list[tuple[datetime, float]] = []
+    s = now.replace(minute=now.minute - now.minute % 15, second=0, microsecond=0)
+    while s < top_start:
+        hours = (min(s + EV_SLOT, top_start) - max(s, now)).total_seconds() / 3600
+        slots.append((s, hours))
+        s += EV_SLOT
+    need_h = bulk_kwh / power_kw if bulk_kwh > 0 else 0.0
+    if need_h >= sum(h for _, h in slots):
+        return EvPlan(True, slots[0][0] if slots else None, top, "Zeit knapp: lädt durchgehend")
+
+    chosen: list[datetime] = []
+    got = 0.0
+    for s, h in sorted(slots, key=lambda x: (current_price(windows, x[0], normal_price), -x[0].timestamp())):
+        if got >= need_h:
+            break
+        chosen.append(s)
+        got += h
+    start = min(chosen) if chosen else None
+    now_slot = slots[0][0]
+    if now_slot in chosen:
+        return EvPlan(True, start, top, "Hauptladung im günstigen Zeitraum")
+    if start is None:
+        return EvPlan(False, None, top, "Restladung kurz vor der Zielzeit")
+    return EvPlan(False, start, top, "wartet auf günstigen Zeitraum")

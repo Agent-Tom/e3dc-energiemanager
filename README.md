@@ -8,7 +8,8 @@ Eigene Integration zur Steuerung von E3DC-Hausakku, E3DC-Wallboxen und einer SG-
 - **Netzladung im Niedrigtarif**: Ziel-SoC aus stündlichem Verbrauchsprofil (Recorder-Statistik), Temperaturkorrektur nach Wärmepumpen-Modell und Solcast-Prognose für den Zeitraum bis zum nächsten Niedrigtarif-Fenster. Was die PV bis Fensterende über den Hausverbrauch hinaus liefert, wird nicht aus dem Netz geladen. Die Ladeleistung wird so gewählt, dass das Ziel erst kurz vor Fensterende erreicht wird.
 - **Akku im Niedrigtarif halten**: Entladung gesperrt, das Haus läuft günstig aus dem Netz.
 - **Sommer-Modus**: Sagt die PV-Prognose für heute Leistung über der AC-Grenze voraus, lädt der Akku morgens nur bis zu einer Ladegrenze und bleibt dann bis zur Spitze gesperrt (optional aktive Entladung, unter Berücksichtigung des Hausverbrauchs bis dahin). In der Spitze nimmt der Akku nur die PV-Leistung über der AC-Grenze auf, der Rest wird eingespeist. So ist mittags genau so viel Platz frei, wie sonst abgeregelt würde. Der Sensor „Sommer: PV über AC-Grenze“ zeigt die erwartete Energie, Beginn und Ende der Spitze, die Ladegrenze und die aktuelle Ladebegrenzung.
-- **Wallboxen** (E3DC RSCP) mit je einem Modus: Aus, Sofort laden, Nur Niedrigtarif, PV-Überschuss + Niedrigtarif.
+- **Wallboxen** (E3DC RSCP) mit je einem Modus: Aus, Sofort laden, Nur Niedrigtarif, Nur PV-Überschuss, PV-Überschuss + Niedrigtarif. Ein Status-Sensor je Wallbox zeigt Ausgesteckt, Angeschlossen oder Lädt.
+- **Zielladung** je Wallbox: Ladestand des Autos in % oder Energiemenge in kWh bis zu einer Uhrzeit, jeden Tag, solange sie eingeschaltet ist. Geladen wird in den günstigsten Viertelstunden vor der Zielzeit, davon in den spätesten, sodass das Ziel erst kurz vor der Zielzeit erreicht ist. Über 90 % lädt das Auto in den günstigen Zeiten nur bis 90 %, der Rest folgt direkt vor der Zielzeit. Die Zielladung ersetzt die Netzladung des Modus; „Sofort laden“ hat Vorrang, PV-Überschuss lädt in den Überschuss-Modi zusätzlich (beim Ladestand-Ziel nur bis 90 %).
 - **Wärmepumpe**: SG-Ready „Einschaltempfehlung“ im Niedrigtarif und bei PV-Überschuss, optional Sperre im Hochtarif. Kälter/Wärmer-Anhebung nach Temperaturprognose plus Boost im Niedrigtarif.
 
 ## Voraussetzungen
@@ -49,6 +50,8 @@ Vorher alle anderen Steuerungen abschalten, die dieselben Geräte bedienen, sons
 | Sensor „Akku-Entscheidung“ | Was gerade mit dem Akku passiert und warum |
 | Sensor „Netzladeleistung“ | Aktuelle Netzladeleistung |
 | Select „Wallbox … Modus“ | Lademodus je Wallbox |
+| Sensor „Wallbox … Status“ | Ausgesteckt, angeschlossen oder lädt; Attribute mit Modus und Zielladung |
+| Schalter „Wallbox … Zielladung“, Zeit „Wallbox … fertig um“, Select „Wallbox … Zielart“, Zahlen „Ziel-Ladestand“ und „Ziel-Energie“ | Zielladung je Wallbox |
 | Schalter „Simulationsmodus“ | Nur rechnen, nichts schalten |
 
 ## Hinweise zur E3DC-Ansteuerung

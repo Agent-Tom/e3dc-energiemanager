@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import logging
 from typing import Any
 
@@ -16,6 +16,8 @@ from . import planner
 from .const import (
     CONF_CAPACITY,
     CONF_E3DC_DEVICE,
+    CONF_EV_MAX_SOC_SENSOR,
+    CONF_EV_SOC_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
     CONF_HP_CURVE,
     CONF_HP_MODEL,
@@ -35,6 +37,8 @@ from .const import (
     CONF_WALLBOXES,
     CONF_WEATHER,
     DEFAULT_CAPACITY,
+    DEFAULT_EV_MAX_SOC_SENSOR,
+    DEFAULT_EV_SOC_SENSOR,
     DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
@@ -42,6 +46,11 @@ from .const import (
     DEFAULT_PRICE_NORMAL,
     DEFAULT_TARIFF,
     DOMAIN,
+    EV_DEFAULT_POWER_KW,
+    EV_EFFICIENCY,
+    EV_FINISH_BUFFER_MIN,
+    EV_TOPUP_FROM_PCT,
+    EV_TOPUP_POWER_FACTOR,
     POWER_MODE_REFRESH_S,
     SETTINGS_NUMBERS,
     SETTINGS_SWITCHES,
@@ -50,6 +59,7 @@ from .const import (
     SUMMER_HYST_PCT,
     SUMMER_MIN_CLIP_KWH,
     UPDATE_INTERVAL_S,
+    WALLBOX_SURPLUS_MODES,
     WALLBOX_TOGGLE_COOLDOWN_S,
 )
 
@@ -85,6 +95,8 @@ class EMState:
     hp_offset: float | None = None
     hp_sg_state: int = 0
     wallbox_status: dict[str, str] = field(default_factory=dict)
+    wallbox_state: dict[str, str | None] = field(default_factory=dict)  # ausgesteckt/angeschlossen/laedt
+    wallbox_ev: dict[str, dict[str, Any]] = field(default_factory=dict)  # Zielladung zur Anzeige
     profile_kw: list[float] = field(default_factory=list)
     t_history: float | None = None
     last_error: str | None = None
@@ -141,6 +153,19 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self.settings: dict[str, Any] = {k: v[0] for k, v in SETTINGS_NUMBERS.items()}
         self.settings.update(SETTINGS_SWITCHES)
         self.wallbox_modes: dict[str, str] = {w: "ueberschuss_niedrigtarif" for w in self.wallboxes}
+        self.ev_soc_sensor = cfg.get(CONF_EV_SOC_SENSOR, DEFAULT_EV_SOC_SENSOR)
+        self.ev_max_soc_sensor = cfg.get(CONF_EV_MAX_SOC_SENSOR, DEFAULT_EV_MAX_SOC_SENSOR)
+        # Zielladung je Wallbox (von Switch/Time/Number/Select-Entitäten gepflegt)
+        self.ev: dict[str, dict[str, Any]] = {
+            w: {
+                "ev_target": False,
+                "ev_time": time(5, 30),
+                "ev_soc": 100.0,
+                "ev_kwh": 20.0,
+                "ev_type": "ladestand" if self.ev_soc_sensor else "energie",
+            }
+            for w in self.wallboxes
+        }
 
         self.state = EMState()
         self._locked_plans: dict[str, planner.ChargePlan] = {}
@@ -148,6 +173,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self._applied_cmd: BatteryCommand | None = None
         self._applied_at: datetime | None = None
         self._wb_last_toggle: dict[str, datetime] = {}
+        self._ev_soc_ref: dict[str, tuple[float, float]] = {}
         self._temp_forecast: list[tuple[datetime, float]] = []
         self._temp_fc_at: datetime | None = None
         self._released = False
@@ -177,6 +203,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
 
     async def async_set_wallbox_mode(self, wb: str, mode: str) -> None:
         self.wallbox_modes[wb] = mode
+        await self.async_request_refresh()
+
+    async def async_set_ev(self, wb: str, key: str, value: Any) -> None:
+        self.ev[wb][key] = value
         await self.async_request_refresh()
 
     async def _call(self, domain: str, service: str, data: dict) -> None:
@@ -527,7 +557,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             sun_sw = f"switch.{wb}_sun_mode"
             toggle = f"button.{wb}_toggle_charging"
             charging = self.hass.states.is_state(f"binary_sensor.{wb}_charging", STATE_ON)
-            plugged = self.hass.states.is_state(f"binary_sensor.{wb}_plug", STATE_ON)
+            plug = self.hass.states.get(f"binary_sensor.{wb}_plug")
+            plugged = plug is not None and plug.state == STATE_ON
+            if plug is None or plug.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                self.state.wallbox_state[wb] = None
+            else:
+                self.state.wallbox_state[wb] = "laedt" if charging else "angeschlossen" if plugged else "ausgesteckt"
 
             if mode == "netzladen":
                 want_sun, want_charge = False, True
@@ -535,10 +570,29 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                 want_sun, want_charge = False, low
             elif mode == "ueberschuss_niedrigtarif":
                 want_sun, want_charge = (not low), True
+            elif mode == "nur_pv":
+                want_sun, want_charge = True, True
             else:
                 want_sun, want_charge = True, False
 
             status = f"{mode}: {'lädt' if charging else 'lädt nicht'}"
+            ev = self.ev[wb]
+            self.state.wallbox_ev[wb] = {}
+            # Zielladung ersetzt die Netzladung des Modus; „Sofort laden“ hat Vorrang
+            if ev["ev_target"] and mode != "netzladen":
+                if not plugged:
+                    self.state.wallbox_ev[wb] = {"begruendung": "wartet auf Auto"}
+                else:
+                    plan, surplus_ok, info = self._ev_plan(wb, now)
+                    self.state.wallbox_ev[wb] = info
+                    if plan is not None:
+                        if plan.charge_now:
+                            want_sun, want_charge = False, True
+                        else:
+                            want_sun = True
+                            want_charge = surplus_ok and mode in WALLBOX_SURPLUS_MODES
+                        status = f"Zielladung: {plan.reason}, {'lädt' if charging else 'lädt nicht'}"
+
             if not plugged:
                 self.state.wallbox_status[wb] = f"{mode}: kein Auto"
                 continue
@@ -555,6 +609,76 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                     self._wb_last_toggle[wb] = now
                     status += " → umgeschaltet"
             self.state.wallbox_status[wb] = status
+
+    def _ev_power_kw(self, wb: str) -> float:
+        """Ladeleistung der Wallbox aus Ladestrom und Phasen."""
+        amps = _f(self.hass, f"number.{wb}_max_charge_current")
+        phases = _f(self.hass, f"sensor.{wb}_phases")
+        if amps and phases:
+            return amps * phases * 0.23
+        return EV_DEFAULT_POWER_KW
+
+    def _ev_soc(self, wb: str, charged: float) -> float | None:
+        """Ladestand des Autos, zwischen zwei Meldungen um die geladene Energie fortgeschrieben.
+
+        Der Fahrzeugsensor meldet nur gelegentlich; ohne Fortschreibung würde die
+        Planung mit einem veralteten Stand zu lange laden.
+        """
+        soc = _f(self.hass, self.ev_soc_sensor)
+        if soc is None:
+            return None
+        ref = self._ev_soc_ref.get(wb)
+        if ref is None or ref[0] != soc or charged < ref[1]:
+            self._ev_soc_ref[wb] = (soc, charged)
+            return soc
+        cap = float(self.settings["ev_capacity_kwh"])
+        return min(100.0, soc + (charged - ref[1]) * EV_EFFICIENCY / cap * 100)
+
+    def _ev_plan(self, wb: str, now: datetime) -> tuple[planner.EvPlan | None, bool, dict[str, Any]]:
+        """Zielladung: Plan, ob PV-Überschuss zusätzlich laden darf, Anzeige-Attribute."""
+        ev = self.ev[wb]
+        deadline = planner.next_deadline(now, ev["ev_time"])
+        power = self._ev_power_kw(wb)
+        # Zähler der Wallbox: geladene Energie seit dem Anstecken
+        charged = _f(self.hass, f"sensor.{wb}_energy_all", 0.0) or 0.0
+        buffer = timedelta(minutes=EV_FINISH_BUFFER_MIN)
+        info: dict[str, Any] = {
+            "fertig_um": deadline.isoformat(),
+            "ladeleistung_kw": round(power, 1),
+            "geladen_kwh": round(charged, 1),
+        }
+        if ev["ev_type"] == "ladestand":
+            soc = self._ev_soc(wb, charged)
+            if soc is None:
+                info["begruendung"] = "Ladestand des Autos unbekannt"
+                return None, False, info
+            target = float(ev["ev_soc"])
+            car_max = _f(self.hass, self.ev_max_soc_sensor)
+            if car_max:
+                target = min(target, car_max)
+            bulk_to = min(target, EV_TOPUP_FROM_PCT)
+            cap = float(self.settings["ev_capacity_kwh"])
+            bulk = max(0.0, bulk_to - soc) / 100 * cap
+            top = max(0.0, target - max(soc, bulk_to)) / 100 * cap
+            eff = power * EV_EFFICIENCY
+            plan = planner.ev_plan(
+                now, deadline, bulk, top, eff, eff * EV_TOPUP_POWER_FACTOR, self.windows, self.normal_price, buffer
+            )
+            surplus_ok = soc < bulk_to
+            info.update(ziel=f"{target:.0f} %", ladestand=round(soc), fehlt_kwh=round(bulk + top, 1))
+            if car_max and car_max < float(ev["ev_soc"]):
+                info["hinweis"] = f"Auto begrenzt auf {car_max:.0f} %"
+        else:
+            rest = max(0.0, float(ev["ev_kwh"]) - charged)
+            plan = planner.ev_plan(now, deadline, rest, 0.0, power, power, self.windows, self.normal_price, buffer)
+            surplus_ok = True
+            info.update(ziel=f"{float(ev['ev_kwh']):.0f} kWh", fehlt_kwh=round(rest, 1))
+        info.update(
+            begruendung=plan.reason,
+            start=plan.start.isoformat() if plan.start else None,
+            restladung_ab=plan.top_start.isoformat() if plan.top_start else None,
+        )
+        return plan, surplus_ok, info
 
     # ------------------------------------------------------------ Wärmepumpe
     async def _async_heatpump(self, now: datetime) -> None:

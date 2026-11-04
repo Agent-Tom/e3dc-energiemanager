@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 
+from .const import WALLBOX_STATES
 from .coordinator import EMState, EnergyCoordinator
 from .entity import EMEntity
 
@@ -126,6 +127,7 @@ SENSORS: tuple[EMSensorDescription, ...] = (
 async def async_setup_entry(hass, entry, async_add_entities):
     coord = entry.runtime_data
     async_add_entities(EMSensor(coord, d) for d in SENSORS)
+    async_add_entities(WallboxStateSensor(coord, wb) for wb in coord.wallboxes)
 
 
 class EMSensor(EMEntity, SensorEntity):
@@ -143,3 +145,30 @@ class EMSensor(EMEntity, SensorEntity):
     def extra_state_attributes(self):
         fn = self.entity_description.attrs
         return fn(self.coordinator.state, self.coordinator) if fn else None
+
+
+class WallboxStateSensor(EMEntity, SensorEntity):
+    """Ausgesteckt, angeschlossen oder lädt; Attribute mit Modus und Zielladung."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = WALLBOX_STATES
+
+    def __init__(self, coordinator, wb: str):
+        super().__init__(coordinator, f"wallbox_state_{wb}")
+        self._wb = wb
+        self._attr_translation_key = "wallbox_state"
+        self._attr_translation_placeholders = {"wallbox": wb.capitalize()}
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.state.wallbox_state.get(self._wb)
+
+    @property
+    def extra_state_attributes(self):
+        s = self.coordinator.state
+        ev = self.coordinator.ev[self._wb]
+        return {
+            "status": s.wallbox_status.get(self._wb),
+            "zielladung_aktiv": ev["ev_target"],
+            **{f"zielladung_{k}": v for k, v in s.wallbox_ev.get(self._wb, {}).items()},
+        }

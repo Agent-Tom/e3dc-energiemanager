@@ -9,7 +9,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 1. Stromtarif mit mehreren Zeitfenstern (low / normal / high, je mit Preis)
 2. Netzladung im Niedrigtarif auf Basis von Verbrauchshistorie, Temperaturprognose und PV-Prognose
 3. Sommer: morgens Platz im Akku schaffen für die Mittags-PV
-4. Wallboxsteuerung mit Modi: Aus, Sofort laden (Netz), Nur Niedrigtarif, PV-Überschuss + Niedrigtarif
+4. Wallboxsteuerung mit Modi: Aus, Sofort laden (Netz), Nur Niedrigtarif, Nur PV-Überschuss, PV-Überschuss + Niedrigtarif; dazu Zielladung (Ladestand oder kWh bis Uhrzeit)
 5. Wärmepumpe im Niedrigtarif: SG-Ready „Einschaltempfehlung“ + Temperaturanhebung
 6. Temperaturanhebung der Wärmepumpe abhängig von der Temperaturprognose
 
@@ -43,8 +43,9 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 - low 02–06 und 12–16 Uhr, high 18–21 Uhr, sonst normal
 
 **Wallboxen (E3DC, über `e3dc_rscp`)** – Präfixe `garage` und `carport`
-- `switch.<wb>_sun_mode`, `button.<wb>_toggle_charging`, `binary_sensor.<wb>_charging`, `binary_sensor.<wb>_plug`, `number.<wb>_max_charge_current`
-- Auto: NIO EL6
+- `switch.<wb>_sun_mode`, `button.<wb>_toggle_charging`, `binary_sensor.<wb>_charging`, `binary_sensor.<wb>_plug`, `number.<wb>_max_charge_current`, `sensor.<wb>_phases`
+- `sensor.<wb>_energy_all` (kWh) zählt die Energie seit dem Anstecken (steht vor dem Anstecken auf 0)
+- Auto: NIO EL6, 100-kWh-Akku (etwa 90 kWh nutzbar); `sensor.el6_battery_state_of_charge`, Ladelimit im Auto `sensor.el6_maximum_state_of_charge`. Lädt an beiden Wallboxen.
 
 **Wärmepumpe Remko (über MQTT)**
 - Kälter/Wärmer-Offset: `number.remko_mqtt_kalter_warmer`
@@ -67,6 +68,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 - Nach Erreichen des Ziels im Niedrigtarif: **Entladung gesperrt** bis Fensterende.
 - Der Plan wird beim Eintritt ins Fenster **eingefroren**, außerhalb wird er als Vorschau laufend neu berechnet.
 - WP-Grundoffset aus der Prognose für 07:00 am Folgetag: unter 0 °C +2 K, unter 5 °C +1 K, sonst 0. Im Niedrigtarif zusätzlich +2 K.
+- **Zielladung** (Wallbox): gilt täglich, solange der Schalter an ist. Hauptmenge in den günstigsten 15-Minuten-Blöcken vor der Zielzeit, bei gleichem Preis in den spätesten, in jedem Zyklus neu gerechnet. Bei Zielen über 90 % in den günstigen Zeiten nur bis 90 %, der Rest direkt vor der Zielzeit (Wunsch von Thomas: Auto steht nicht lange auf 100 %). Rechnung mit Ladestrom × Phasen × 230 V, 90 % Wirkungsgrad, oberhalb 90 % 70 % der Leistung, 15 min Puffer. Das Ziel wird auf das Ladelimit im Auto begrenzt, sonst würde der Taster endlos umschalten. Der Ladestand aus der NIO-API kommt nur gelegentlich; dazwischen wird er mit `energy_all` fortgeschrieben.
 - **Sommer-Modus** richtet sich nach der Abregelung: Aus Solcast **P50** wird die Energie berechnet, die heute noch über der AC-Grenze (12 kW, einstellbar) anfällt und nur der Akku aufnehmen kann (je Stunde höchstens die DC-Ladeleistung). Ab „Sommer: Morgen ab“ lädt der Akku frei bis zur **Ladegrenze** = 100 % − Überschuss/Kapazität − Reserve (5 %). Danach begrenzt `max_charge` die Ladeleistung auf **PV-Leistung − AC-Grenze + 500 W**, auf 500-W-Stufen aufgerundet: vor der Spitze ist das 0 (Ladesperre), in der Spitze genau der Teil, der sonst abgeregelt würde. Ohne diese Begrenzung lüde der E3DC in der Spitze den gesamten Überschuss und wäre voll, bevor die Leistung über der AC-Grenze anfällt. Die Begrenzung bleibt vor der Spitze stehen (kein Takten); in der Spitze fällt sie weg, sobald der SoC mehr als 3 % unter der mitlaufenden Ladegrenze liegt, und endet mit der letzten Prognosestunde über der Grenze. Optional aktive Entladung bis Ladegrenze + Hausverbrauch bis zur Spitze (Profil minus PV-Prognose), nie unter „Sommer: Entladen bis“. Unter 0,5 kWh erwarteter Abregelung passiert nichts. Im Niedrigtarif hat die Netzladung Vorrang; die Halte-Logik (Entladesperre) bekommt die Ladebegrenzung mit dazu.
 
 ## Erfahrungen mit Maestro (warum die Ablösung)

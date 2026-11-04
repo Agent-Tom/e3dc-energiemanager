@@ -440,5 +440,56 @@ class TestWpOffset(unittest.TestCase):
             planner.parse_model("35, 54.3, x, 8")
 
 
+class TestZielladung(unittest.TestCase):
+    def setUp(self):
+        self.w = planner.parse_tariff(OCTOPUS)
+
+    def plan(self, now, bulk, top=0.0, power=11.0, top_power=11.0, puffer=15):
+        return planner.ev_plan(
+            now, dt(5, 30, 3), bulk, top, power, top_power, self.w, 0.27, timedelta(minutes=puffer)
+        )
+
+    def test_next_deadline(self):
+        self.assertEqual(planner.next_deadline(dt(22), time(5, 30)), dt(5, 30, 3))
+        self.assertEqual(planner.next_deadline(dt(4, tag=3), time(5, 30)), dt(5, 30, 3))
+        self.assertEqual(planner.next_deadline(dt(5, 30, 3), time(5, 30)), dt(5, 30, 4))
+
+    def test_spaet_im_niedrigtarif(self):
+        p = self.plan(dt(22), 11)
+        self.assertFalse(p.charge_now)
+        self.assertEqual(p.start, dt(4, 15, 3))
+        self.assertIsNone(p.top_start)
+
+    def test_laeuft_wenn_block_erreicht(self):
+        self.assertTrue(self.plan(dt(4, 15, 3), 11).charge_now)
+        self.assertFalse(self.plan(dt(4, 0, 3), 11).charge_now)
+
+    def test_guenstig_vor_spaet(self):
+        # Mittags-Niedrigtarif liegt früher, der Nacht-Niedrigtarif gewinnt
+        self.assertEqual(self.plan(dt(11), 11).start, dt(4, 15, 3))
+        # Mehr als das Nachtfenster: der Rest in den späten Mittagsstunden
+        p = self.plan(dt(11), 11 * 4.25)
+        self.assertEqual(p.start, dt(15, 0))
+
+    def test_restladung_vor_zielzeit(self):
+        # 90 → 100 %: 7 kWh bei 7 kW = 1 h vor 05:30, Hauptladung 2 h davor
+        p = self.plan(dt(1, tag=3), 20, top=7, power=10, top_power=7, puffer=0)
+        self.assertFalse(p.charge_now)
+        self.assertEqual(p.top_start, dt(4, 30, 3))
+        self.assertEqual(p.start, dt(2, 30, 3))
+        self.assertTrue(self.plan(dt(4, 30, 3), 0, top=7, top_power=7, puffer=0).charge_now)
+
+    def test_zeit_knapp(self):
+        p = self.plan(dt(4, tag=3), 30)
+        self.assertTrue(p.charge_now)
+        # Der angebrochene Block zählt nur anteilig
+        self.assertTrue(self.plan(dt(4, 20, 3), 11).charge_now)
+
+    def test_ziel_erreicht(self):
+        p = self.plan(dt(22), 0)
+        self.assertFalse(p.charge_now)
+        self.assertEqual(p.reason, "Ziel erreicht")
+
+
 if __name__ == "__main__":
     unittest.main()

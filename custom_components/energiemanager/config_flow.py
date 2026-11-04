@@ -13,6 +13,8 @@ from . import planner
 from .const import (
     CONF_CAPACITY,
     CONF_E3DC_DEVICE,
+    CONF_EV_MAX_SOC_SENSOR,
+    CONF_EV_SOC_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
     CONF_HP_CURVE,
     CONF_HP_MODEL,
@@ -32,6 +34,8 @@ from .const import (
     CONF_WALLBOXES,
     CONF_WEATHER,
     DEFAULT_CAPACITY,
+    DEFAULT_EV_MAX_SOC_SENSOR,
+    DEFAULT_EV_SOC_SENSOR,
     DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
@@ -54,6 +58,8 @@ SUGGEST = {
     CONF_SG2: "switch.sg_ready2",
     CONF_SG_SURPLUS_SENSOR: "sensor.s10e_pro_sg_ready",
     CONF_HP_OFFSET: "number.remko_mqtt_kalter_warmer",
+    CONF_EV_SOC_SENSOR: DEFAULT_EV_SOC_SENSOR,
+    CONF_EV_MAX_SOC_SENSOR: DEFAULT_EV_MAX_SOC_SENSOR,
 }
 
 
@@ -110,6 +116,8 @@ def schema_devices(cur: dict) -> vol.Schema:
     return vol.Schema(
         {
             _opt(CONF_WALLBOXES, cur, DEFAULT_WALLBOXES, required=False): sel.TextSelector(),
+            _opt(CONF_EV_SOC_SENSOR, cur, required=False): _ent("sensor"),
+            _opt(CONF_EV_MAX_SOC_SENSOR, cur, required=False): _ent("sensor"),
             _opt(CONF_SG1, cur, required=False): _ent("switch"),
             _opt(CONF_SG2, cur, required=False): _ent("switch"),
             _opt(CONF_SG_SURPLUS_SENSOR, cur, required=False): _ent("sensor"),

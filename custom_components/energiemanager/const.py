@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "energiemanager"
-PLATFORMS = ["sensor", "switch", "number", "select"]
+PLATFORMS = ["sensor", "switch", "number", "select", "time"]
 
 # --- Grundkonfiguration ---
 CONF_E3DC_DEVICE = "e3dc_device"
@@ -23,6 +23,8 @@ CONF_PRICE_NORMAL = "price_normal"
 
 # --- Wallboxen ---
 CONF_WALLBOXES = "wallboxes"
+CONF_EV_SOC_SENSOR = "ev_soc_sensor"
+CONF_EV_MAX_SOC_SENSOR = "ev_max_soc_sensor"
 
 # --- Wärmepumpe ---
 CONF_SG1 = "sg_ready_1_switch"
@@ -39,6 +41,8 @@ DEFAULT_CAPACITY = 32.6
 DEFAULT_MAX_CHARGE_W = 12000
 DEFAULT_MAX_DISCHARGE_W = 12000
 DEFAULT_WALLBOXES = "garage, carport"
+DEFAULT_EV_SOC_SENSOR = "sensor.el6_battery_state_of_charge"
+DEFAULT_EV_MAX_SOC_SENSOR = "sensor.el6_maximum_state_of_charge"
 DEFAULT_HP_CURVE = "0:2, 5:1"
 # Tagesverbrauch ≈ base + max(min_hp, a − b·T)
 DEFAULT_HP_MODEL = "35, 54.3, 3.2, 8"
@@ -47,7 +51,16 @@ LEVEL_LOW = "low"
 LEVEL_NORMAL = "normal"
 LEVEL_HIGH = "high"
 
-WALLBOX_MODES = ["aus", "netzladen", "niedrigtarif", "ueberschuss_niedrigtarif"]
+WALLBOX_MODES = ["aus", "netzladen", "niedrigtarif", "nur_pv", "ueberschuss_niedrigtarif"]
+# In diesen Modi lädt die Wallbox mit PV-Überschuss (E3DC-Sonnenmodus)
+WALLBOX_SURPLUS_MODES = ("nur_pv", "ueberschuss_niedrigtarif")
+WALLBOX_STATES = ["ausgesteckt", "angeschlossen", "laedt"]
+EV_TARGET_TYPES = ["ladestand", "energie"]
+# Zielladung je Wallbox: key -> (min, max, step, unit)
+EV_NUMBERS: dict[str, tuple[float, float, float, str]] = {
+    "ev_soc": (10, 100, 5, "%"),
+    "ev_kwh": (1, 150, 1, "kWh"),
+}
 
 # Einstellbare Werte (Number-Entitäten): key -> (default, min, max, step, unit)
 SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
@@ -63,6 +76,7 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "summer_morning_target_soc": (30, 0, 100, 5, "%"),
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
     "hp_boost_k": (2, 0, 5, 0.5, "K"),
+    "ev_capacity_kwh": (90, 10, 200, 1, "kWh"),
     "history_days": (14, 3, 60, 1, "d"),
 }
 
@@ -90,3 +104,13 @@ SUMMER_CHARGE_MARGIN_W = 500
 SUMMER_CHARGE_STEP_W = 500
 # In der Spitze frei laden, wenn der SoC so weit unter der Ladegrenze liegt
 SUMMER_HYST_PCT = 3
+# Zielladung: bis hierhin in den günstigen Zeiten, der Rest kurz vor der Zielzeit
+EV_TOPUP_FROM_PCT = 90
+# Wallbox-Energie → Fahrzeugakku
+EV_EFFICIENCY = 0.9
+# Oberhalb EV_TOPUP_FROM_PCT lädt das Auto langsamer
+EV_TOPUP_POWER_FACTOR = 0.7
+# So viel früher als die Zielzeit soll das Ziel rechnerisch erreicht sein
+EV_FINISH_BUFFER_MIN = 15
+# Falls Ladestrom oder Phasen der Wallbox nicht lesbar sind
+EV_DEFAULT_POWER_KW = 11.0
