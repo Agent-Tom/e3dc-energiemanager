@@ -51,8 +51,13 @@
           "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
           "hp_offset_curve": "Anhebungskurve",
           "hp_consumption_model": "Verbrauchsmodell Wärmepumpe",
-          "ev_soc_sensor": "E-Auto: Ladestand-Sensor (optional)",
-          "ev_max_soc_sensor": "E-Auto: Ladelimit-Sensor (optional)"
+          "ev_soc_sensor": "E-Auto 1: Ladestand-Sensor (optional)",
+          "ev_max_soc_sensor": "E-Auto 1: Ladelimit (optional)",
+          "ev_name": "E-Auto 1: Name",
+          "ev2_name": "E-Auto 2: Name",
+          "ev2_soc_sensor": "E-Auto 2: Ladestand-Sensor (optional)",
+          "ev2_max_soc_sensor": "E-Auto 2: Ladelimit (optional)",
+          "ev2_plug_sensor": "E-Auto 2: Ladekabel-Sensor (optional)"
         }
       }
     }
@@ -88,8 +93,13 @@
           "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
           "hp_offset_curve": "Anhebungskurve",
           "hp_consumption_model": "Verbrauchsmodell Wärmepumpe",
-          "ev_soc_sensor": "E-Auto: Ladestand-Sensor (optional)",
-          "ev_max_soc_sensor": "E-Auto: Ladelimit-Sensor (optional)"
+          "ev_soc_sensor": "E-Auto 1: Ladestand-Sensor (optional)",
+          "ev_max_soc_sensor": "E-Auto 1: Ladelimit (optional)",
+          "ev_name": "E-Auto 1: Name",
+          "ev2_name": "E-Auto 2: Name",
+          "ev2_soc_sensor": "E-Auto 2: Ladestand-Sensor (optional)",
+          "ev2_max_soc_sensor": "E-Auto 2: Ladelimit (optional)",
+          "ev2_plug_sensor": "E-Auto 2: Ladekabel-Sensor (optional)"
         }
       },
       "basic": {
@@ -254,10 +264,13 @@
         "name": "Wallbox {wallbox} Ziel-Energie"
       },
       "ev_capacity_kwh": {
-        "name": "E-Auto: Akkukapazität"
+        "name": "E-Auto 1: Akkukapazität"
       },
       "battery_loss_pct": {
         "name": "Wandlungsverluste Hausakku"
+      },
+      "ev2_capacity_kwh": {
+        "name": "E-Auto 2: Akkukapazität"
       }
     },
     "select": {
@@ -277,6 +290,9 @@
           "ladestand": "Ladestand (%)",
           "energie": "Energie (kWh)"
         }
+      },
+      "ev_car": {
+        "name": "Wallbox {wallbox} Vorgabe-Fahrzeug"
       }
     },
     "time": {

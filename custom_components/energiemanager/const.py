@@ -31,6 +31,11 @@ CONF_HOUSE_ENERGY_SENSOR = "house_energy_sensor"
 CONF_WALLBOXES = "wallboxes"
 CONF_EV_SOC_SENSOR = "ev_soc_sensor"
 CONF_EV_MAX_SOC_SENSOR = "ev_max_soc_sensor"
+CONF_EV_NAME = "ev_name"
+CONF_EV2_NAME = "ev2_name"
+CONF_EV2_SOC_SENSOR = "ev2_soc_sensor"
+CONF_EV2_MAX_SOC_SENSOR = "ev2_max_soc_sensor"
+CONF_EV2_PLUG_SENSOR = "ev2_plug_sensor"
 
 # --- Wärmepumpe ---
 CONF_SG1 = "sg_ready_1_switch"
@@ -55,6 +60,11 @@ DEFAULT_MAX_DISCHARGE_W = 12000
 DEFAULT_WALLBOXES = "garage, carport"
 DEFAULT_EV_SOC_SENSOR = "sensor.el6_battery_state_of_charge"
 DEFAULT_EV_MAX_SOC_SENSOR = "sensor.el6_maximum_state_of_charge"
+DEFAULT_EV_NAME = "EL6"
+DEFAULT_EV2_NAME = "Ioniq 6"
+DEFAULT_EV2_SOC_SENSOR = "sensor.ioniq_6_23_ladestand_ev_batterie"
+DEFAULT_EV2_MAX_SOC_SENSOR = "number.ioniq_6_23_ac_ladelimit"
+DEFAULT_EV2_PLUG_SENSOR = "binary_sensor.ioniq_6_23_ev_ladekabel"
 DEFAULT_HP_CURVE = "0:2, 5:1"
 # Tagesverbrauch ≈ base + max(min_hp, a − b·T)
 DEFAULT_HP_MODEL = "35, 54.3, 3.2, 8"
@@ -89,6 +99,7 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
     "hp_boost_k": (2, 0, 5, 0.5, "K"),
     "ev_capacity_kwh": (90, 10, 200, 1, "kWh"),
+    "ev2_capacity_kwh": (53, 10, 200, 1, "kWh"),
     "battery_loss_pct": (10, 0, 30, 1, "%"),
     "history_days": (14, 3, 60, 1, "d"),
 }

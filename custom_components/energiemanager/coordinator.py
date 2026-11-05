@@ -18,7 +18,12 @@ from .const import (
     CONF_BASE_FEE,
     CONF_BATTERY_CHARGE_ENERGY_SENSOR,
     CONF_E3DC_DEVICE,
+    CONF_EV2_MAX_SOC_SENSOR,
+    CONF_EV2_NAME,
+    CONF_EV2_PLUG_SENSOR,
+    CONF_EV2_SOC_SENSOR,
     CONF_EV_MAX_SOC_SENSOR,
+    CONF_EV_NAME,
     CONF_EV_SOC_SENSOR,
     CONF_GRID_IMPORT_SENSOR,
     CONF_HOUSE_ENERGY_SENSOR,
@@ -45,7 +50,12 @@ from .const import (
     DEFAULT_BASE_FEE,
     DEFAULT_BATTERY_CHARGE_ENERGY_SENSOR,
     DEFAULT_CAPACITY,
+    DEFAULT_EV2_MAX_SOC_SENSOR,
+    DEFAULT_EV2_NAME,
+    DEFAULT_EV2_PLUG_SENSOR,
+    DEFAULT_EV2_SOC_SENSOR,
     DEFAULT_EV_MAX_SOC_SENSOR,
+    DEFAULT_EV_NAME,
     DEFAULT_EV_SOC_SENSOR,
     DEFAULT_GRID_IMPORT_SENSOR,
     DEFAULT_HOUSE_ENERGY_SENSOR,
@@ -112,6 +122,7 @@ class EMState:
     wallbox_status: dict[str, str] = field(default_factory=dict)
     wallbox_state: dict[str, str | None] = field(default_factory=dict)  # ausgesteckt/angeschlossen/laedt
     wallbox_ev: dict[str, dict[str, Any]] = field(default_factory=dict)  # Zielladung zur Anzeige
+    wallbox_car: dict[str, str | None] = field(default_factory=dict)  # erkanntes Auto je Wallbox
     profile_kw: list[float] = field(default_factory=list)
     price_stats: dict[str, planner.PriceStats | None] = field(default_factory=dict)  # day/month/year
     price_stats_at: datetime | None = None
@@ -185,8 +196,24 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self.settings: dict[str, Any] = {k: v[0] for k, v in SETTINGS_NUMBERS.items()}
         self.settings.update(SETTINGS_SWITCHES)
         self.wallbox_modes: dict[str, str] = {w: "ueberschuss_niedrigtarif" for w in self.wallboxes}
-        self.ev_soc_sensor = cfg.get(CONF_EV_SOC_SENSOR, DEFAULT_EV_SOC_SENSOR)
-        self.ev_max_soc_sensor = cfg.get(CONF_EV_MAX_SOC_SENSOR, DEFAULT_EV_MAX_SOC_SENSOR)
+        # Autos für die Zielladung nach Ladestand; das zweite nur mit Ladestand-Sensor
+        self.cars: dict[str, dict[str, Any]] = {
+            str(cfg.get(CONF_EV_NAME) or DEFAULT_EV_NAME): {
+                "soc": cfg.get(CONF_EV_SOC_SENSOR, DEFAULT_EV_SOC_SENSOR),
+                "max": cfg.get(CONF_EV_MAX_SOC_SENSOR, DEFAULT_EV_MAX_SOC_SENSOR),
+                "plug": None,
+                "capacity": "ev_capacity_kwh",
+            },
+        }
+        ev2_soc = cfg.get(CONF_EV2_SOC_SENSOR, DEFAULT_EV2_SOC_SENSOR)
+        if ev2_soc:
+            self.cars[str(cfg.get(CONF_EV2_NAME) or DEFAULT_EV2_NAME)] = {
+                "soc": ev2_soc,
+                "max": cfg.get(CONF_EV2_MAX_SOC_SENSOR, DEFAULT_EV2_MAX_SOC_SENSOR),
+                "plug": cfg.get(CONF_EV2_PLUG_SENSOR, DEFAULT_EV2_PLUG_SENSOR),
+                "capacity": "ev2_capacity_kwh",
+            }
+        names = list(self.cars)
         # Zielladung je Wallbox (von Switch/Time/Number/Select-Entitäten gepflegt)
         self.ev: dict[str, dict[str, Any]] = {
             w: {
@@ -194,9 +221,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                 "ev_time": time(5, 30),
                 "ev_soc": 100.0,
                 "ev_kwh": 20.0,
-                "ev_type": "ladestand" if self.ev_soc_sensor else "energie",
+                "ev_type": "ladestand" if self.cars[names[0]]["soc"] else "energie",
+                # Vorgabe-Auto, wenn mehrere Wallboxen belegt sind: der Reihe nach
+                "ev_car": names[min(i, len(names) - 1)],
             }
-            for w in self.wallboxes
+            for i, w in enumerate(self.wallboxes)
         }
 
         self.state = EMState()
@@ -665,6 +694,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
     # ------------------------------------------------------------ Wallboxen
     async def _async_wallboxes(self, now: datetime) -> None:
         low = self.state.level == planner.LOW
+        self.state.wallbox_car = planner.assign_cars(
+            [w for w in self.wallboxes if self.hass.states.is_state(f"binary_sensor.{w}_plug", STATE_ON)],
+            {name: self._car_plugged(car) for name, car in self.cars.items()},
+            {w: self.ev[w]["ev_car"] for w in self.wallboxes},
+        )
         for wb in self.wallboxes:
             mode = self.wallbox_modes.get(wb, "aus")
             sun_sw = f"switch.{wb}_sun_mode"
@@ -731,20 +765,27 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             return amps * phases * 0.23
         return EV_DEFAULT_POWER_KW
 
-    def _ev_soc(self, wb: str, charged: float) -> float | None:
+    def _car_plugged(self, car: dict[str, Any]) -> bool | None:
+        """Ladekabel des Autos: True/False, None ohne (lesbaren) Sensor."""
+        st = self.hass.states.get(car["plug"]) if car["plug"] else None
+        if st is None or st.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            return None
+        return st.state == STATE_ON
+
+    def _ev_soc(self, wb: str, car: dict[str, Any], charged: float) -> float | None:
         """Ladestand des Autos, zwischen zwei Meldungen um die geladene Energie fortgeschrieben.
 
         Der Fahrzeugsensor meldet nur gelegentlich; ohne Fortschreibung würde die
         Planung mit einem veralteten Stand zu lange laden.
         """
-        soc = _f(self.hass, self.ev_soc_sensor)
+        soc = _f(self.hass, car["soc"])
         if soc is None:
             return None
         ref = self._ev_soc_ref.get(wb)
         if ref is None or ref[0] != soc or charged < ref[1]:
             self._ev_soc_ref[wb] = (soc, charged)
             return soc
-        cap = float(self.settings["ev_capacity_kwh"])
+        cap = float(self.settings[car["capacity"]])
         return min(100.0, soc + (charged - ref[1]) * EV_EFFICIENCY / cap * 100)
 
     def _ev_plan(self, wb: str, now: datetime) -> tuple[planner.EvPlan | None, bool, dict[str, Any]]:
@@ -761,16 +802,22 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             "geladen_kwh": round(charged, 1),
         }
         if ev["ev_type"] == "ladestand":
-            soc = self._ev_soc(wb, charged)
+            name = self.state.wallbox_car.get(wb)
+            info["fahrzeug"] = name
+            if name is None:
+                info["begruendung"] = "Fahrzeug nicht erkannt"
+                return None, False, info
+            car = self.cars[name]
+            soc = self._ev_soc(wb, car, charged)
             if soc is None:
-                info["begruendung"] = "Ladestand des Autos unbekannt"
+                info["begruendung"] = f"Ladestand {name} unbekannt"
                 return None, False, info
             target = float(ev["ev_soc"])
-            car_max = _f(self.hass, self.ev_max_soc_sensor)
+            car_max = _f(self.hass, car["max"])
             if car_max:
                 target = min(target, car_max)
             bulk_to = min(target, EV_TOPUP_FROM_PCT)
-            cap = float(self.settings["ev_capacity_kwh"])
+            cap = float(self.settings[car["capacity"]])
             bulk = max(0.0, bulk_to - soc) / 100 * cap
             top = max(0.0, target - max(soc, bulk_to)) / 100 * cap
             eff = power * EV_EFFICIENCY

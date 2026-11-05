@@ -212,6 +212,7 @@ class WallboxStateSensor(EMEntity, SensorEntity):
         ev = self.coordinator.ev[self._wb]
         return {
             "status": s.wallbox_status.get(self._wb),
+            "fahrzeug": s.wallbox_car.get(self._wb),
             "zielladung_aktiv": ev["ev_target"],
             **{f"zielladung_{k}": v for k, v in s.wallbox_ev.get(self._wb, {}).items()},
         }

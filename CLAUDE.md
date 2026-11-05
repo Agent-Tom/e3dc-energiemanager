@@ -46,7 +46,9 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 **Wallboxen (E3DC, über `e3dc_rscp`)** – Präfixe `garage` und `carport`
 - `switch.<wb>_sun_mode`, `button.<wb>_toggle_charging`, `binary_sensor.<wb>_charging`, `binary_sensor.<wb>_plug`, `number.<wb>_max_charge_current`, `sensor.<wb>_phases`
 - `sensor.<wb>_energy_all` (kWh) zählt die Energie seit dem Anstecken (steht vor dem Anstecken auf 0)
-- Auto: NIO EL6, 100-kWh-Akku (etwa 90 kWh nutzbar); `sensor.el6_battery_state_of_charge`, Ladelimit im Auto `sensor.el6_maximum_state_of_charge`. Lädt an beiden Wallboxen.
+- Auto 1: NIO EL6, 100-kWh-Akku (etwa 90 kWh nutzbar); `sensor.el6_battery_state_of_charge`, Ladelimit im Auto `sensor.el6_maximum_state_of_charge`, kein Ladekabel-Sensor. Lädt an beiden Wallboxen.
+- Auto 2: Hyundai Ioniq 6 (2023, 53 kWh) über HACS-Integration `kia_uvo` (Hyundai Bluelink EU, Anmeldung mit E-Mail/Passwort); `sensor.ioniq_6_23_ladestand_ev_batterie`, AC-Ladelimit `number.ioniq_6_23_ac_ladelimit`, Ladekabel `binary_sensor.ioniq_6_23_ev_ladekabel`. Die Bluelink-Daten kommen verzögert (Abfrageintervall); direkt nach dem Anstecken kann der Kabel-Sensor noch „aus“ melden.
+- Fahrzeugerkennung je Wallbox: eine Wallbox belegt → Auto mit gestecktem Kabel, sonst das einzige mögliche; beide belegt → Vorgabe-Fahrzeug je Wallbox (Garage = EL6, Carport = Ioniq 6).
 
 **Wärmepumpe Remko (über MQTT)**
 - Kälter/Wärmer-Offset: `number.remko_mqtt_kalter_warmer`

@@ -492,6 +492,37 @@ class TestZielladung(unittest.TestCase):
 
 
 
+class TestAutoZuordnung(unittest.TestCase):
+    VORGABE = {"garage": "EL6", "carport": "Ioniq"}
+
+    def test_eine_wallbox_ioniq_kabel_steckt(self):
+        z = planner.assign_cars(["garage"], {"EL6": None, "Ioniq": True}, self.VORGABE)
+        self.assertEqual(z, {"garage": "Ioniq"})
+
+    def test_eine_wallbox_ioniq_kabel_steckt_nicht(self):
+        z = planner.assign_cars(["carport"], {"EL6": None, "Ioniq": False}, self.VORGABE)
+        self.assertEqual(z, {"carport": "EL6"})
+
+    def test_eine_wallbox_ioniq_unbekannt(self):
+        z = planner.assign_cars(["carport"], {"EL6": None, "Ioniq": None}, self.VORGABE)
+        self.assertEqual(z, {"carport": "Ioniq"})
+
+    def test_zwei_wallboxen_nach_vorgabe(self):
+        z = planner.assign_cars(["garage", "carport"], {"EL6": None, "Ioniq": True}, self.VORGABE)
+        self.assertEqual(z, {"garage": "EL6", "carport": "Ioniq"})
+
+    def test_zwei_wallboxen_ioniq_nicht_dran(self):
+        z = planner.assign_cars(["garage", "carport"], {"EL6": None, "Ioniq": False}, self.VORGABE)
+        self.assertEqual(z, {"garage": "EL6", "carport": None})
+
+    def test_jedes_auto_nur_einmal(self):
+        z = planner.assign_cars(["garage", "carport"], {"EL6": None}, {"garage": "EL6", "carport": "EL6"})
+        self.assertEqual(z, {"garage": "EL6", "carport": None})
+
+    def test_keine_wallbox(self):
+        self.assertEqual(planner.assign_cars([], {"EL6": None}, self.VORGABE), {})
+
+
 class TestPreisStatistik(unittest.TestCase):
     def setUp(self):
         self.w = planner.parse_tariff(OCTOPUS)

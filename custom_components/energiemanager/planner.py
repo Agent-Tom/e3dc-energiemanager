@@ -523,3 +523,41 @@ def price_history(
         g[0] += e
         g[1] += e * price + b * price * loss_pct / 100
     return [(k, round(kwh, 1), round(cost / kwh * 100, 2)) for k, (kwh, cost) in sorted(groups.items())]
+
+
+def assign_cars(
+    plugged: list[str],
+    car_plugged: dict[str, bool | None],
+    defaults: dict[str, str],
+) -> dict[str, str | None]:
+    """Welches Auto hängt an welcher Wallbox?
+
+    plugged: Wallboxen mit eingestecktem Kabel, in fester Reihenfolge.
+    car_plugged: je Auto True/False aus seinem Ladekabel-Sensor, None ohne Sensor.
+    defaults: Vorgabe-Auto je Wallbox.
+
+    Steckt nur eine Wallbox, hängt dort das Auto, dessen Kabel steckt, sonst das
+    einzige, das in Frage kommt. Sind mehrere Wallboxen belegt, gilt die Vorgabe.
+    Ein Auto, dessen Kabel nachweislich nicht steckt, wird nie zugeordnet, und
+    jedes Auto höchstens einer Wallbox.
+    """
+    possible = [c for c, p in car_plugged.items() if p is not False]
+    known = [c for c, p in car_plugged.items() if p is True]
+    out: dict[str, str | None] = {}
+    if len(plugged) == 1:
+        wb = plugged[0]
+        if len(known) == 1:
+            out[wb] = known[0]
+        elif len(possible) == 1:
+            out[wb] = possible[0]
+        else:
+            d = defaults.get(wb)
+            out[wb] = d if d in possible else None
+        return out
+    used: set[str] = set()
+    for wb in plugged:
+        d = defaults.get(wb)
+        out[wb] = d if d in possible and d not in used else None
+        if out[wb]:
+            used.add(out[wb])
+    return out
