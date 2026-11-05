@@ -104,15 +104,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 
 ## Livegang
 
-Seit 03.11.2026 produktiv (Simulationsmodus aus). Damit nicht mehrere Logiken dieselben Geräte steuern, sind abgeschaltet – zum Zurückfallen auf den alten Stand wieder einschalten:
-- E3DC Maestro: `switch.e3dc_maestro_regelung_aktiv`
-- `automation.e3dc_netzlade_ziel_dynamisch_anpassen`
-- `automation.wp_sg_ready_niedrigtarif_octopus_heat`
-- `automation.wp_solltemperatur_2_degc_niedrigtarif_mittags`
-- `automation.sg_ready_0_nach_15_55`
-- `automation.sg_ready0`
-- `automation.akku_morgens_auf_10_entleeren_bei_pv_prognose_100_kwh` (steuert Maestros erzwungene Entladung)
-- `automation.maestro_verbrauchsfaktor_nach_temperaturprognose`, `automation.maestro_netzladung_drosseln_8_kw` (waren schon aus)
+Seit 03.11.2026 produktiv (Simulationsmodus aus). Seit 05.11.2026 sind E3DC Maestro (Integration, Cockpit, Dashboard, HACS-Dateien) und die abgelösten Automationen für Netzlade-Ziel, SG-Ready, WP-Solltemperatur und Maestro-Entladung gelöscht; ein Zurückfallen auf den alten Stand ist nicht mehr vorgesehen. Der Energiemanager ist die einzige Steuerung für Akku, Wallboxen und Wärmepumpe.
 
 Thomas nutzt keine eigenen Leistungswerte im E3DC-Portal; `clear_power_limits` (Werkseinstellung) ist damit in Ordnung. `number.remko_mqtt_kalter_warmer` steht nach einem HA-Neustart einige Minuten auf „unknown“; so lange schreibt der Energiemanager die Anhebung nicht.
 
