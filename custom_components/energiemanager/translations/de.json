@@ -139,6 +139,9 @@
       "price": {
         "name": "Strompreis"
       },
+      "price_ct": {
+        "name": "Strompreis (ct/kWh)"
+      },
       "target_soc": {
         "name": "Netzlade-Ziel"
       },

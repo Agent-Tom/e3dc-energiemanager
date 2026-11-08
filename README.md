@@ -50,6 +50,7 @@ Vorher alle anderen Steuerungen abschalten, die dieselben Geräte bedienen, sons
 | Sensor „Netzlade-Ziel“ | Ziel-SoC des laufenden oder nächsten Niedrigtarif-Fensters, Attribute mit der Rechnung |
 | Sensor „Akku-Entscheidung“ | Was gerade mit dem Akku passiert und warum |
 | Sensor „Netzladeleistung“ | Aktuelle Netzladeleistung |
+| Sensor „Strompreis“ und „Strompreis (ct/kWh)“ | Aktueller Tarifpreis in EUR/kWh (für das Energie-Dashboard) und in ct/kWh (zur Anzeige) |
 | Select „Wallbox … Modus“ | Lademodus je Wallbox |
 | Sensor „Wallbox … Status“ | Ausgesteckt, angeschlossen oder lädt; Attribute mit Modus und Zielladung |
 | Schalter „Wallbox … Zielladung“, Zeit „Wallbox … fertig um“, Select „Wallbox … Zielart“, Zahlen „Ziel-Ladestand“ und „Ziel-Energie“ | Zielladung je Wallbox |

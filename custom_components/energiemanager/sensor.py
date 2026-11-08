@@ -90,6 +90,14 @@ SENSORS: tuple[EMSensorDescription, ...] = (
         suggested_display_precision=3,
         value=lambda s: s.price,
     ),
+    # Für die Anzeige in derselben Einheit wie die Durchschnittspreise; das
+    # Energie-Dashboard braucht den Preis in EUR/kWh und bleibt beim Sensor oben
+    EMSensorDescription(
+        key="price_ct",
+        native_unit_of_measurement="ct/kWh",
+        suggested_display_precision=2,
+        value=lambda s: round(s.price * 100, 2),
+    ),
     *(
         EMSensorDescription(
             key=f"price_avg_{key}",
