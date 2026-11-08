@@ -28,7 +28,6 @@ from .const import (
     CONF_GRID_IMPORT_SENSOR,
     CONF_HOUSE_ENERGY_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
-    CONF_HP_CURVE,
     CONF_HP_MODEL,
     CONF_HP_OFFSET,
     CONF_MAX_CHARGE_W,
@@ -59,7 +58,6 @@ from .const import (
     DEFAULT_EV_SOC_SENSOR,
     DEFAULT_GRID_IMPORT_SENSOR,
     DEFAULT_HOUSE_ENERGY_SENSOR,
-    DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
@@ -83,6 +81,8 @@ from .const import (
     SUMMER_CHARGE_STEP_W,
     SUMMER_HYST_PCT,
     SUMMER_MIN_CLIP_KWH,
+    HP_THRESHOLD_HYSTERESIS_K,
+    HP_TREND_MAX_GAP_MIN,
     UPDATE_INTERVAL_S,
     WALLBOX_SURPLUS_MODES,
     WALLBOX_TOGGLE_COOLDOWN_S,
@@ -118,6 +118,9 @@ class EMState:
     summer_soc_ceiling: float | None = None
     summer_charge_limit: int | None = None     # Ladegrenze in W während Sperre und Spitze
     hp_offset: float | None = None
+    hp_detail: planner.HpOffset | None = None
+    hp_temp_now: float | None = None
+    hp_temp_24h: float | None = None
     hp_sg_state: int = 0
     wallbox_status: dict[str, str] = field(default_factory=dict)
     wallbox_state: dict[str, str | None] = field(default_factory=dict)  # ausgesteckt/angeschlossen/laedt
@@ -185,7 +188,6 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self.batt_max_charge = int(cfg.get(CONF_MAX_CHARGE_W, DEFAULT_MAX_CHARGE_W))
         self.batt_max_discharge = int(cfg.get(CONF_MAX_DISCHARGE_W, DEFAULT_MAX_DISCHARGE_W))
         self.hp_model = planner.parse_model(cfg.get(CONF_HP_MODEL, DEFAULT_HP_MODEL))
-        self.hp_curve = planner.parse_curve(cfg.get(CONF_HP_CURVE, DEFAULT_HP_CURVE))
         self.wallboxes = [
             w.strip().lower()
             for w in str(cfg.get(CONF_WALLBOXES, "")).split(",")
@@ -865,21 +867,37 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                 if self.hass.states.get(ent) is not None and self.hass.states.is_state(ent, STATE_ON) != want:
                     await self._call("switch", "turn_on" if want else "turn_off", {"entity_id": ent})
 
-        # Temperaturanhebung: Grundwert aus Prognose (morgen 07:00), im Niedrigtarif + Boost
-        t_ref = None
-        target_t = (now + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
-        if now.hour < 7:
-            target_t = now.replace(hour=7, minute=0, second=0, microsecond=0)
-        for d, t in self._temp_forecast:
-            if d >= target_t:
-                t_ref = t
-                break
-        if t_ref is None:
-            t_ref = _f(self.hass, self.cfg.get(CONF_OUTDOOR_TEMP))
-        base = planner.hp_base_offset(t_ref, self.hp_curve)
-        offset = base + (float(self.settings["hp_boost_k"]) if s.level == planner.LOW else 0)
-        s.hp_offset = offset
+        # Temperaturanhebung: Schwelle (gemessen), 24-h-Trend (Vorhersage), Boost im Niedrigtarif
+        gap = timedelta(minutes=HP_TREND_MAX_GAP_MIN)
+        t_now = _f(self.hass, self.cfg.get(CONF_OUTDOOR_TEMP))
+        if t_now is None:
+            t_now = planner.forecast_at(self._temp_forecast, now, gap)
+        t_24h = planner.forecast_at(self._temp_forecast, now + timedelta(days=1), gap)
+        cfg = self.settings
+        detail = planner.hp_offset(
+            t_now,
+            t_24h,
+            threshold_c=float(cfg["hp_threshold_c"]),
+            threshold_k=float(cfg["hp_threshold_k"]),
+            cold_c=float(cfg["hp_trend_cold_c"]),
+            cold_k=float(cfg["hp_trend_cold_k"]),
+            warm_c=float(cfg["hp_trend_warm_c"]),
+            warm_k=float(cfg["hp_trend_warm_k"]),
+            boost_k=float(cfg["hp_boost_k"]),
+            low=s.level == planner.LOW,
+            was_below=s.hp_detail.below if s.hp_detail else False,
+            hysteresis=HP_THRESHOLD_HYSTERESIS_K,
+        )
         num = self.cfg.get(CONF_HP_OFFSET)
+        offset = detail.total
+        st = self.hass.states.get(num) if num else None
+        if st is not None:
+            # Auf den Wertebereich und das Raster der Wärmepumpe bringen
+            step = float(st.attributes.get("step") or 0.5)
+            offset = round(offset / step) * step
+            offset = min(float(st.attributes.get("max", offset)), max(float(st.attributes.get("min", offset)), offset))
+        s.hp_detail, s.hp_temp_now, s.hp_temp_24h = detail, t_now, t_24h
+        s.hp_offset = offset
         cur = _f(self.hass, num)
         if num and cur is not None and abs(cur - offset) > 0.01:
             await self._call("number", "set_value", {"entity_id": num, "value": offset})

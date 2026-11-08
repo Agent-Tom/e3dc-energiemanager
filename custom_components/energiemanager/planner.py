@@ -333,23 +333,64 @@ def peak_charge_limit_w(pv_kw: float, ac_limit_kw: float, max_w: int, margin_w: 
         return 0
     return min(max_w, math.ceil(need / step_w) * step_w)
 
-def hp_base_offset(temp: float | None, curve: list[tuple[float, float]]) -> float:
-    """curve: [(Schwelle °C, Anhebung K)], z. B. [(0, 2), (5, 1)]: unter 0 °C +2, unter 5 °C +1."""
-    if temp is None:
-        return 0.0
-    for thr, val in sorted(curve):
-        if temp < thr:
-            return val
-    return 0.0
+@dataclass
+class HpOffset:
+    """Anhebung der Wärmepumpe in K und ihre Bestandteile."""
+
+    total: float
+    threshold_k: float = 0.0
+    trend_k: float = 0.0
+    boost_k: float = 0.0
+    below: bool = False            # Außentemperatur unter der Schwelle (mit Hysterese)
+    delta: float | None = None     # Vorhersage in 24 h minus jetzt
 
 
-def parse_curve(text: str) -> list[tuple[float, float]]:
-    out = []
-    for part in text.split(","):
-        if ":" in part:
-            a, b = part.split(":")
-            out.append((float(a.strip().replace("−", "-")), float(b.strip())))
-    return out
+def forecast_at(
+    forecast: list[tuple[datetime, float]], at: datetime, max_gap: timedelta
+) -> float | None:
+    """Vorhersagewert am nächsten an `at`, oder None, wenn keiner näher als max_gap liegt."""
+    best = min(forecast, key=lambda f: abs(f[0] - at), default=None)
+    if best is None or abs(best[0] - at) > max_gap:
+        return None
+    return best[1]
+
+
+def hp_offset(
+    temp_now: float | None,
+    temp_24h: float | None,
+    *,
+    threshold_c: float,
+    threshold_k: float,
+    cold_c: float,
+    cold_k: float,
+    warm_c: float,
+    warm_k: float,
+    boost_k: float,
+    low: bool,
+    was_below: bool,
+    hysteresis: float,
+) -> HpOffset:
+    """Anhebung aus Schwelle, 24-h-Trend und Niedrigtarif-Boost.
+
+    Unter threshold_c gibt es threshold_k; verlassen wird die Schwelle erst bei
+    threshold_c + hysteresis. Ist es laut Vorhersage in 24 h um cold_c kälter,
+    kommt cold_k dazu; um warm_c wärmer, geht warm_k ab. Im Niedrigtarif kommt
+    boost_k dazu. Fehlt die Außentemperatur, bleibt der letzte Schwellenzustand.
+    """
+    if temp_now is None:
+        below = was_below
+    else:
+        below = temp_now < threshold_c + (hysteresis if was_below else 0)
+    t_k = threshold_k if below else 0.0
+    delta = None if temp_now is None or temp_24h is None else temp_24h - temp_now
+    trend = 0.0
+    if delta is not None:
+        if delta <= -cold_c:
+            trend = cold_k
+        elif delta >= warm_c:
+            trend = -warm_k
+    b_k = boost_k if low else 0.0
+    return HpOffset(t_k + trend + b_k, t_k, trend, b_k, below, delta)
 
 
 def parse_model(text: str) -> tuple[float, float, float, float]:

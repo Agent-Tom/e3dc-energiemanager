@@ -150,7 +150,16 @@ SENSORS: tuple[EMSensorDescription, ...] = (
         key="hp_offset",
         native_unit_of_measurement="K",
         value=lambda s: s.hp_offset,
-        attrs=lambda s, c: {"sg_ready_status": s.hp_sg_state},
+        attrs=lambda s, c: {
+            "sg_ready_status": s.hp_sg_state,
+            "aussen_jetzt": s.hp_temp_now,
+            "aussen_in_24h": s.hp_temp_24h,
+            "aenderung_24h": round(s.hp_detail.delta, 1) if s.hp_detail and s.hp_detail.delta is not None else None,
+            "unter_schwelle": s.hp_detail.below if s.hp_detail else None,
+            "anhebung_schwelle": s.hp_detail.threshold_k if s.hp_detail else None,
+            "anhebung_trend": s.hp_detail.trend_k if s.hp_detail else None,
+            "anhebung_niedrigtarif": s.hp_detail.boost_k if s.hp_detail else None,
+        },
     ),
     EMSensorDescription(
         key="consumption_profile",

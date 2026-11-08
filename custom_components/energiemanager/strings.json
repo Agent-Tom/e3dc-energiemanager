@@ -6,7 +6,6 @@
     "error": {
       "invalid_tariff": "Tarif-Fenster konnten nicht gelesen werden. Format: 02:00-06:00=low@0.18; 18:00-21:00=high@0.35",
       "no_low_window": "Mindestens ein Fenster muss die Stufe 'low' haben.",
-      "invalid_curve": "Format: Schwelle:Anhebung, z. B. 0:2, 5:1",
       "invalid_model": "Format: base, a, b, min – z. B. 35, 54.3, 3.2, 8"
     },
     "step": {
@@ -49,7 +48,6 @@
           "sg_ready_2_switch": "SG-Ready Kontakt 2",
           "sg_surplus_sensor": "E3DC SG-Ready-Sensor (PV-Überschuss)",
           "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
-          "hp_offset_curve": "Anhebungskurve",
           "hp_consumption_model": "Verbrauchsmodell Wärmepumpe",
           "ev_soc_sensor": "E-Auto 1: Ladestand-Sensor (optional)",
           "ev_max_soc_sensor": "E-Auto 1: Ladelimit (optional)",
@@ -91,7 +89,6 @@
           "sg_ready_2_switch": "SG-Ready Kontakt 2",
           "sg_surplus_sensor": "E3DC SG-Ready-Sensor (PV-Überschuss)",
           "hp_offset_number": "Wärmepumpe Kälter/Wärmer",
-          "hp_offset_curve": "Anhebungskurve",
           "hp_consumption_model": "Verbrauchsmodell Wärmepumpe",
           "ev_soc_sensor": "E-Auto 1: Ladestand-Sensor (optional)",
           "ev_max_soc_sensor": "E-Auto 1: Ladelimit (optional)",
@@ -126,7 +123,6 @@
     "error": {
       "invalid_tariff": "Tarif-Fenster konnten nicht gelesen werden. Format: 02:00-06:00=low@0.18; 18:00-21:00=high@0.35",
       "no_low_window": "Mindestens ein Fenster muss die Stufe 'low' haben.",
-      "invalid_curve": "Format: Schwelle:Anhebung, z. B. 0:2, 5:1",
       "invalid_model": "Format: base, a, b, min – z. B. 35, 54.3, 3.2, 8"
     }
   },
@@ -253,6 +249,24 @@
       },
       "hp_boost_k": {
         "name": "Wärmepumpe Anhebung im Niedrigtarif"
+      },
+      "hp_threshold_c": {
+        "name": "Wärmepumpe: Anhebung unter Außentemperatur"
+      },
+      "hp_threshold_k": {
+        "name": "Wärmepumpe: Anhebung unter der Schwelle"
+      },
+      "hp_trend_cold_c": {
+        "name": "Wärmepumpe: Kälter in 24 h ab"
+      },
+      "hp_trend_cold_k": {
+        "name": "Wärmepumpe: Anhebung bei Kälter"
+      },
+      "hp_trend_warm_c": {
+        "name": "Wärmepumpe: Wärmer in 24 h ab"
+      },
+      "hp_trend_warm_k": {
+        "name": "Wärmepumpe: Absenkung bei Wärmer"
       },
       "history_days": {
         "name": "Verbrauchshistorie"

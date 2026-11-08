@@ -42,7 +42,6 @@ CONF_SG1 = "sg_ready_1_switch"
 CONF_SG2 = "sg_ready_2_switch"
 CONF_SG_SURPLUS_SENSOR = "sg_surplus_sensor"
 CONF_HP_OFFSET = "hp_offset_number"
-CONF_HP_CURVE = "hp_offset_curve"
 CONF_HP_MODEL = "hp_consumption_model"
 
 # --- Defaults (aus Thomas' Setup) ---
@@ -65,7 +64,6 @@ DEFAULT_EV2_NAME = "Ioniq 6"
 DEFAULT_EV2_SOC_SENSOR = "sensor.ioniq_6_23_ladestand_ev_batterie"
 DEFAULT_EV2_MAX_SOC_SENSOR = "number.ioniq_6_23_ac_ladelimit"
 DEFAULT_EV2_PLUG_SENSOR = "binary_sensor.ioniq_6_23_ev_ladekabel"
-DEFAULT_HP_CURVE = "0:2, 5:1"
 # Tagesverbrauch ≈ base + max(min_hp, a − b·T)
 DEFAULT_HP_MODEL = "35, 54.3, 3.2, 8"
 
@@ -98,6 +96,12 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "summer_morning_target_soc": (30, 0, 100, 5, "%"),
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
     "hp_boost_k": (2, 0, 5, 0.5, "K"),
+    "hp_threshold_c": (5, -20, 20, 0.5, "°C"),
+    "hp_threshold_k": (1, 0, 5, 0.5, "K"),
+    "hp_trend_cold_c": (5, 1, 20, 0.5, "°C"),
+    "hp_trend_cold_k": (1, 0, 5, 0.5, "K"),
+    "hp_trend_warm_c": (5, 1, 20, 0.5, "°C"),
+    "hp_trend_warm_k": (1, 0, 5, 0.5, "K"),
     "ev_capacity_kwh": (90, 10, 200, 1, "kWh"),
     "ev2_capacity_kwh": (53, 10, 200, 1, "kWh"),
     "battery_loss_pct": (10, 0, 30, 1, "%"),
@@ -119,6 +123,10 @@ SETTINGS_SWITCHES: dict[str, bool] = {
 }
 
 UPDATE_INTERVAL_S = 30
+# Wärmepumpe: Schwelle erst so weit darüber wieder verlassen, damit die Anhebung nicht pendelt
+HP_THRESHOLD_HYSTERESIS_K = 0.5
+# Vorhersagewert für den Trend: höchstens so weit neben „jetzt + 24 h“
+HP_TREND_MAX_GAP_MIN = 90
 # Durchschnittspreise aus der Recorder-Statistik so oft neu rechnen
 PRICE_STATS_INTERVAL_MIN = 15
 # Verlauf der Durchschnittspreise: so viele Tage, und Monate/Jahre ab diesem Jahresabstand

@@ -411,26 +411,59 @@ class TestSommer(unittest.TestCase):
         self.assertEqual(planner.peak_charge_limit_w(30.0, 12.0, 12000, 500, 500), 12000)
 
 class TestWpOffset(unittest.TestCase):
-    KURVE = [(0.0, 2.0), (5.0, 1.0)]
+    EIN = dict(
+        threshold_c=5, threshold_k=1, cold_c=5, cold_k=1, warm_c=5, warm_k=1,
+        boost_k=2, low=False, was_below=False, hysteresis=0.5,
+    )
 
-    def test_hp_base_offset(self):
-        erwartet = {-3: 2.0, -0.1: 2.0, 0: 1.0, 3: 1.0, 4.9: 1.0, 5: 0.0, 12: 0.0}
-        for temp, offset in erwartet.items():
+    def wp(self, jetzt, in24, **kw):
+        return planner.hp_offset(jetzt, in24, **{**self.EIN, **kw})
+
+    def test_schwelle(self):
+        erwartet = {-3: 1.0, 4.9: 1.0, 5: 0.0, 12: 0.0}
+        for temp, k in erwartet.items():
             with self.subTest(temp=temp):
-                self.assertEqual(planner.hp_base_offset(temp, self.KURVE), offset)
+                self.assertEqual(self.wp(temp, temp).total, k)
 
-    def test_hp_base_offset_unsortierte_kurve(self):
-        self.assertEqual(planner.hp_base_offset(-3, list(reversed(self.KURVE))), 2.0)
+    def test_schwelle_hysterese(self):
+        # Einmal drunter, bleibt die Anhebung bis Schwelle + 0,5
+        self.assertEqual(self.wp(5.3, 5.3, was_below=True).total, 1.0)
+        self.assertTrue(self.wp(5.3, 5.3, was_below=True).below)
+        self.assertEqual(self.wp(5.5, 5.5, was_below=True).total, 0.0)
+        self.assertEqual(self.wp(5.3, 5.3, was_below=False).total, 0.0)
 
-    def test_hp_base_offset_ohne_daten(self):
-        self.assertEqual(planner.hp_base_offset(None, self.KURVE), 0.0)
-        self.assertEqual(planner.hp_base_offset(-10, []), 0.0)
+    def test_trend(self):
+        self.assertEqual(self.wp(10, 5).trend_k, 1.0)      # genau 5 °C kälter
+        self.assertEqual(self.wp(10, 6).trend_k, 0.0)
+        self.assertEqual(self.wp(10, 15).trend_k, -1.0)    # 5 °C wärmer
+        self.assertEqual(self.wp(10, 14.5).trend_k, 0.0)
+        self.assertEqual(self.wp(10, 3).delta, -7)
+        # Schwelle und Trend addieren sich, Wärmer kann unter null gehen
+        self.assertEqual(self.wp(4, -2).total, 2.0)
+        self.assertEqual(self.wp(8, 14).total, -1.0)
 
-    def test_parse_curve(self):
-        self.assertEqual(planner.parse_curve("0:2, 5:1"), self.KURVE)
-        self.assertEqual(planner.parse_curve("−5:3, -2:1.5"), [(-5.0, 3.0), (-2.0, 1.5)])
-        self.assertEqual(planner.parse_curve("abc, 1:2"), [(1.0, 2.0)])
-        self.assertEqual(planner.parse_curve(""), [])
+    def test_trend_eigene_werte(self):
+        r = self.wp(10, 7, cold_c=3, cold_k=1.5, warm_c=2, warm_k=0.5)
+        self.assertEqual(r.trend_k, 1.5)
+        self.assertEqual(self.wp(10, 12, cold_c=3, warm_c=2, warm_k=0.5).trend_k, -0.5)
+
+    def test_niedrigtarif(self):
+        r = self.wp(3, 3, low=True)
+        self.assertEqual((r.total, r.threshold_k, r.boost_k), (3.0, 1.0, 2.0))
+
+    def test_ohne_daten(self):
+        self.assertEqual(self.wp(None, None).total, 0.0)
+        self.assertEqual(self.wp(None, None, was_below=True).total, 1.0)
+        self.assertIsNone(self.wp(3, None).delta)
+        self.assertEqual(self.wp(3, None).total, 1.0)
+
+    def test_forecast_at(self):
+        fc = [(dt(h), float(h)) for h in range(0, 24, 3)]
+        gap = timedelta(minutes=90)
+        self.assertEqual(planner.forecast_at(fc, dt(7), gap), 6.0)
+        self.assertEqual(planner.forecast_at(fc, dt(8), gap), 9.0)
+        self.assertIsNone(planner.forecast_at(fc, dt(23, tag=3), gap))
+        self.assertIsNone(planner.forecast_at([], dt(8), gap))
 
     def test_parse_model(self):
         self.assertEqual(planner.parse_model("35, 54.3, 3.2, 8"), MODELL)

@@ -25,7 +25,6 @@ from .const import (
     CONF_GRID_IMPORT_SENSOR,
     CONF_HOUSE_ENERGY_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
-    CONF_HP_CURVE,
     CONF_HP_MODEL,
     CONF_HP_OFFSET,
     CONF_MAX_CHARGE_W,
@@ -56,7 +55,6 @@ from .const import (
     DEFAULT_EV_SOC_SENSOR,
     DEFAULT_GRID_IMPORT_SENSOR,
     DEFAULT_HOUSE_ENERGY_SENSOR,
-    DEFAULT_HP_CURVE,
     DEFAULT_HP_MODEL,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
@@ -162,7 +160,6 @@ def schema_devices(cur: dict) -> vol.Schema:
             _opt(CONF_SG2, cur, required=False): _ent("switch"),
             _opt(CONF_SG_SURPLUS_SENSOR, cur, required=False): _ent("sensor"),
             _opt(CONF_HP_OFFSET, cur, required=False): _ent(["number", "input_number"]),
-            _opt(CONF_HP_CURVE, cur, DEFAULT_HP_CURVE): sel.TextSelector(),
             _opt(CONF_HP_MODEL, cur, DEFAULT_HP_MODEL): sel.TextSelector(),
         }
     )
@@ -179,10 +176,6 @@ def _validate_tariff(data: dict) -> dict[str, str]:
 
 
 def _validate_devices(data: dict) -> dict[str, str]:
-    try:
-        planner.parse_curve(data.get(CONF_HP_CURVE, ""))
-    except Exception:  # noqa: BLE001
-        return {CONF_HP_CURVE: "invalid_curve"}
     try:
         planner.parse_model(data.get(CONF_HP_MODEL, ""))
     except Exception:  # noqa: BLE001
