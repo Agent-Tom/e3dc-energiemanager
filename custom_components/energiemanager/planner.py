@@ -341,6 +341,7 @@ class HpOffset:
     threshold_k: float = 0.0
     trend_k: float = 0.0
     boost_k: float = 0.0
+    manual_k: float = 0.0
     below: bool = False            # Außentemperatur unter der Schwelle (mit Hysterese)
     delta: float | None = None     # Vorhersage in 24 h minus jetzt
 
@@ -369,13 +370,15 @@ def hp_offset(
     low: bool,
     was_below: bool,
     hysteresis: float,
+    manual_k: float = 0.0,
 ) -> HpOffset:
-    """Anhebung aus Schwelle, 24-h-Trend und Niedrigtarif-Boost.
+    """Anhebung aus Schwelle, 24-h-Trend, Niedrigtarif-Boost und pauschaler Anpassung.
 
     Unter threshold_c gibt es threshold_k; verlassen wird die Schwelle erst bei
     threshold_c + hysteresis. Ist es laut Vorhersage in 24 h um cold_c kälter,
     kommt cold_k dazu; um warm_c wärmer, geht warm_k ab. Im Niedrigtarif kommt
-    boost_k dazu. Fehlt die Außentemperatur, bleibt der letzte Schwellenzustand.
+    boost_k dazu. manual_k gilt immer, auch negativ. Fehlt die Außentemperatur,
+    bleibt der letzte Schwellenzustand.
     """
     if temp_now is None:
         below = was_below
@@ -390,7 +393,7 @@ def hp_offset(
         elif delta >= warm_c:
             trend = -warm_k
     b_k = boost_k if low else 0.0
-    return HpOffset(t_k + trend + b_k, t_k, trend, b_k, below, delta)
+    return HpOffset(t_k + trend + b_k + manual_k, t_k, trend, b_k, manual_k, below, delta)
 
 
 def parse_model(text: str) -> tuple[float, float, float, float]:

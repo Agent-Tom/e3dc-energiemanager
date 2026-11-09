@@ -167,6 +167,7 @@ SENSORS: tuple[EMSensorDescription, ...] = (
             "anhebung_schwelle": s.hp_detail.threshold_k if s.hp_detail else None,
             "anhebung_trend": s.hp_detail.trend_k if s.hp_detail else None,
             "anhebung_niedrigtarif": s.hp_detail.boost_k if s.hp_detail else None,
+            "anpassung_pauschal": s.hp_detail.manual_k if s.hp_detail else None,
         },
     ),
     EMSensorDescription(

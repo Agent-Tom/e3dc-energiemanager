@@ -271,6 +271,9 @@
       "hp_trend_warm_k": {
         "name": "Wärmepumpe: Absenkung bei Wärmer"
       },
+      "hp_manual_k": {
+        "name": "Wärmepumpe: Pauschale Anpassung"
+      },
       "history_days": {
         "name": "Verbrauchshistorie"
       },

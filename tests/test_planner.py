@@ -447,6 +447,12 @@ class TestWpOffset(unittest.TestCase):
         self.assertEqual(r.trend_k, 1.5)
         self.assertEqual(self.wp(10, 12, cold_c=3, warm_c=2, warm_k=0.5).trend_k, -0.5)
 
+    def test_pauschal(self):
+        r = self.wp(3, 3, manual_k=0.5)
+        self.assertEqual((r.total, r.manual_k), (1.5, 0.5))
+        self.assertEqual(self.wp(12, 12, manual_k=-1.5).total, -1.5)
+        self.assertEqual(self.wp(12, 12).manual_k, 0.0)
+
     def test_niedrigtarif(self):
         r = self.wp(3, 3, low=True)
         self.assertEqual((r.total, r.threshold_k, r.boost_k), (3.0, 1.0, 2.0))

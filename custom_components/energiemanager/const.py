@@ -102,6 +102,7 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "hp_trend_cold_k": (1, 0, 5, 0.5, "K"),
     "hp_trend_warm_c": (5, 1, 20, 0.5, "°C"),
     "hp_trend_warm_k": (1, 0, 5, 0.5, "K"),
+    "hp_manual_k": (0, -5, 5, 0.5, "K"),
     "ev_capacity_kwh": (90, 10, 200, 1, "kWh"),
     "ev2_capacity_kwh": (53, 10, 200, 1, "kWh"),
     "battery_loss_pct": (10, 0, 30, 1, "%"),

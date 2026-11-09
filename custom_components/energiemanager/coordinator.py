@@ -887,6 +887,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             low=s.level == planner.LOW,
             was_below=s.hp_detail.below if s.hp_detail else False,
             hysteresis=HP_THRESHOLD_HYSTERESIS_K,
+            manual_k=float(cfg["hp_manual_k"]),
         )
         num = self.cfg.get(CONF_HP_OFFSET)
         offset = detail.total
