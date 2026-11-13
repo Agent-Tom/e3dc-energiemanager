@@ -34,7 +34,7 @@ Steuerung von Hausakku, Wallboxen und Wärmepumpe nach Stromtarif, Wetter- und P
 **Akku / PV (E3DC S10E Pro, über Integration `e3dc_rscp`)**
 - SoC: `sensor.s10e_pro_state_of_charge`
 - Hausverbrauch: `sensor.s10e_pro_house_consumption` (Einheit **kW**)
-- Kapazität 32,6 kWh. 12 kW AC, die Akkus können zusätzlich 12 kW DC aufnehmen.
+- Kapazität laut Typ 32,6 kWh, nutzbar zwischen 0 und 100 % SoC aber nur etwa 25 kWh (gemessen am 12./13.11.2026: 99 → 0 % = 24,3 kWh Entladung, 0 → 80 % = 20,1 kWh Ladung). In den Optionen steht deshalb 25 kWh; mit dem Typwert lud der Akku zu schnell und das Ladeziel fiel zu niedrig aus. 12 kW AC, die Akkus können zusätzlich 12 kW DC aufnehmen.
 - Dienste: `e3dc_rscp.set_power_mode` (power_mode "0"–"4", power_value W), `set_power_limits` (max_charge/max_discharge W), `clear_power_limits`, `manual_charge`, `set_wallbox_max_charge_current` – alle mit `device_id`
 - PV: Hauptdach 28 Module NO (67°) + 38 Module SW (247°), je 375 W, 30° Neigung. Garagen-PV ca. 1,5 kWp, 20° Neigung. Verschattung nur im Winter.
 - PV-Prognose: Solcast, `sensor.solcast_pv_forecast_prognose_heute` / `_morgen`, Attribut `detailedHourly` mit `period_start`, `pv_estimate`, `pv_estimate10`, `pv_estimate90` (stündlicher Mittelwert in kW)
