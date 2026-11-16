@@ -69,6 +69,7 @@ from .const import (
     EV_DEFAULT_POWER_KW,
     EV_EFFICIENCY,
     EV_FINISH_BUFFER_MIN,
+    LOW_END_LEAD_MIN,
     EV_TOPUP_FROM_PCT,
     EV_TOPUP_POWER_FACTOR,
     POWER_MODE_REFRESH_S,
@@ -105,6 +106,8 @@ class BatteryCommand:
 @dataclass
 class EMState:
     level: str = planner.NORMAL
+    # Stufe für Wallboxen und Wärmepumpe: Niedrigtarif endet LOW_END_LEAD_MIN früher
+    device_level: str = planner.NORMAL
     price: float = 0.0
     soc: float | None = None
     plan: planner.ChargePlan | None = None
@@ -455,6 +458,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         await self._async_load_price_stats(now)
 
         s.level = planner.current_level(self.windows, now)
+        s.device_level = planner.device_level(self.windows, now, timedelta(minutes=LOW_END_LEAD_MIN))
         s.price = planner.current_price(self.windows, now, self.normal_price)
         s.soc = _f(self.hass, self.cfg.get(CONF_SOC_SENSOR))
 
@@ -695,7 +699,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
 
     # ------------------------------------------------------------ Wallboxen
     async def _async_wallboxes(self, now: datetime) -> None:
-        low = self.state.level == planner.LOW
+        low = self.state.device_level == planner.LOW
         self.state.wallbox_car = planner.assign_cars(
             [w for w in self.wallboxes if self.hass.states.is_state(f"binary_sensor.{w}_plug", STATE_ON)],
             {name: self._car_plugged(car) for name, car in self.cars.items()},
@@ -798,6 +802,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         # Zähler der Wallbox: geladene Energie seit dem Anstecken
         charged = _f(self.hass, f"sensor.{wb}_energy_all", 0.0) or 0.0
         buffer = timedelta(minutes=EV_FINISH_BUFFER_MIN)
+        lead = timedelta(minutes=LOW_END_LEAD_MIN)
         info: dict[str, Any] = {
             "fertig_um": deadline.isoformat(),
             "ladeleistung_kw": round(power, 1),
@@ -824,7 +829,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             top = max(0.0, target - max(soc, bulk_to)) / 100 * cap
             eff = power * EV_EFFICIENCY
             plan = planner.ev_plan(
-                now, deadline, bulk, top, eff, eff * EV_TOPUP_POWER_FACTOR, self.windows, self.normal_price, buffer
+                now, deadline, bulk, top, eff, eff * EV_TOPUP_POWER_FACTOR,
+                self.windows, self.normal_price, buffer, lead,
             )
             surplus_ok = soc < bulk_to
             info.update(ziel=f"{target:.0f} %", ladestand=round(soc), fehlt_kwh=round(bulk + top, 1))
@@ -832,7 +838,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                 info["hinweis"] = f"Auto begrenzt auf {car_max:.0f} %"
         else:
             rest = max(0.0, float(ev["ev_kwh"]) - charged)
-            plan = planner.ev_plan(now, deadline, rest, 0.0, power, power, self.windows, self.normal_price, buffer)
+            plan = planner.ev_plan(
+                now, deadline, rest, 0.0, power, power, self.windows, self.normal_price, buffer, lead
+            )
             surplus_ok = True
             info.update(ziel=f"{float(ev['ev_kwh']):.0f} kWh", fehlt_kwh=round(rest, 1))
         info.update(
@@ -853,9 +861,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         if sens and self.settings["hp_sg_on_surplus"]:
             surplus = self.hass.states.is_state(sens, "released")
 
-        if s.level == planner.LOW or (surplus and s.level != planner.HIGH):
+        level = s.device_level
+        if level == planner.LOW or (surplus and level != planner.HIGH):
             sg = 3
-        elif s.level == planner.HIGH and self.settings["hp_block_in_high"]:
+        elif level == planner.HIGH and self.settings["hp_block_in_high"]:
             sg = 1
         else:
             sg = 0
@@ -884,7 +893,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             warm_c=float(cfg["hp_trend_warm_c"]),
             warm_k=float(cfg["hp_trend_warm_k"]),
             boost_k=float(cfg["hp_boost_k"]),
-            low=s.level == planner.LOW,
+            low=s.device_level == planner.LOW,
             was_below=s.hp_detail.below if s.hp_detail else False,
             hysteresis=HP_THRESHOLD_HYSTERESIS_K,
             manual_k=float(cfg["hp_manual_k"]),

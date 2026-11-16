@@ -98,6 +98,28 @@ def current_level(windows: list[TariffWindow], now: datetime) -> str:
     return o.level if o else NORMAL
 
 
+def low_ending(windows: list[TariffWindow], now: datetime, lead: timedelta) -> bool:
+    """Niedrigtarif läuft noch, endet aber binnen `lead` und geht nicht in ein weiteres Niedrigtarif-Fenster über."""
+    o = current_window(windows, now)
+    return (
+        o is not None
+        and o.level == LOW
+        and lead > timedelta(0)
+        and now >= o.end - lead
+        and current_level(windows, o.end) != LOW
+    )
+
+
+def device_level(windows: list[TariffWindow], now: datetime, lead: timedelta) -> str:
+    """Tarifstufe für Verbraucher: Der Niedrigtarif endet `lead` früher, danach gilt schon die Stufe danach."""
+    o = current_window(windows, now)
+    if o is None:
+        return NORMAL
+    if low_ending(windows, now, lead):
+        return current_level(windows, o.end)
+    return o.level
+
+
 def current_price(windows: list[TariffWindow], now: datetime, normal_price: float) -> float:
     o = current_window(windows, now)
     if o and o.price is not None:
@@ -431,12 +453,15 @@ def ev_plan(
     windows: list[TariffWindow],
     normal_price: float,
     buffer: timedelta = timedelta(0),
+    low_end_lead: timedelta = timedelta(0),
 ) -> EvPlan:
     """Zielladung: Hauptmenge in den günstigsten 15-Minuten-Blöcken, bei gleichem
     Preis in den spätesten; die Restmenge (top) direkt vor der Zielzeit.
 
     Wird in jedem Zyklus neu gerechnet. Weil die spätesten Blöcke gewählt werden,
     rutscht der laufende Block erst in die Auswahl, wenn er gebraucht wird.
+    In den letzten `low_end_lead` eines Niedrigtarif-Fensters lädt sie nur weiter,
+    wenn auch der Block danach geplant ist; sonst hört sie vorher auf.
     """
     if bulk_kwh <= 0 and top_kwh <= 0:
         return EvPlan(False, None, None, "Ziel erreicht")
@@ -467,6 +492,11 @@ def ev_plan(
         got += h
     start = min(chosen) if chosen else None
     now_slot = slots[0][0]
+    if now_slot in chosen and low_ending(windows, now, low_end_lead):
+        if len(slots) > 1 and slots[1][0] in chosen:
+            return EvPlan(True, start, top, "Hauptladung im günstigen Zeitraum")
+        later = [s for s in chosen if s > now_slot]
+        return EvPlan(False, min(later) if later else None, top, "Niedrigtarif endet gleich")
     if now_slot in chosen:
         return EvPlan(True, start, top, "Hauptladung im günstigen Zeitraum")
     if start is None:

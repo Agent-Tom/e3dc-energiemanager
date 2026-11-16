@@ -99,6 +99,31 @@ class TestFenster(unittest.TestCase):
             with self.subTest(zeit=zeit):
                 self.assertEqual(planner.current_level(self.w, zeit), stufe)
 
+    def test_device_level_endet_frueher(self):
+        vorlauf = timedelta(minutes=3)
+        erwartet = {
+            dt(1, 59): "normal",
+            dt(2): "low",  # Beginn unverändert
+            dt(5, 56): "low",
+            dt(5, 57): "normal",
+            dt(5, 59): "normal",
+            dt(6): "normal",
+            dt(19): "high",
+            dt(20, 59): "high",  # Hochtarif endet nicht früher
+        }
+        for zeit, stufe in erwartet.items():
+            with self.subTest(zeit=zeit):
+                self.assertEqual(planner.device_level(self.w, zeit, vorlauf), stufe)
+        self.assertEqual(planner.device_level(self.w, dt(5, 59), timedelta(0)), "low")
+
+    def test_device_level_angrenzende_fenster(self):
+        vorlauf = timedelta(minutes=3)
+        w = planner.parse_tariff("02:00-06:00=low; 06:00-07:00=low; 07:00-08:00=high")
+        self.assertEqual(planner.device_level(w, dt(5, 58), vorlauf), "low")
+        self.assertEqual(planner.device_level(w, dt(6, 58), vorlauf), "high")
+        self.assertFalse(planner.low_ending(w, dt(5, 58), vorlauf))
+        self.assertTrue(planner.low_ending(w, dt(6, 58), vorlauf))
+
     def test_current_price(self):
         self.assertEqual(planner.current_price(self.w, dt(3), 0.27), 0.18)
         self.assertEqual(planner.current_price(self.w, dt(19), 0.27), 0.35)
@@ -523,6 +548,22 @@ class TestZielladung(unittest.TestCase):
         self.assertTrue(p.charge_now)
         # Der angebrochene Block zählt nur anteilig
         self.assertTrue(self.plan(dt(4, 20, 3), 11).charge_now)
+
+    def test_endet_vor_niedrigtarif_ende(self):
+        # Zielzeit 08:00, 1 h Ladung: nach dem Nachtfenster die spätesten Normalblöcke
+        def plan(now, bulk, vorlauf=3):
+            return planner.ev_plan(
+                now, dt(8, 0, 3), bulk, 0.0, 11.0, 11.0, self.w, 0.27, timedelta(0), timedelta(minutes=vorlauf)
+            )
+
+        self.assertTrue(plan(dt(5, 56, 3), 11).charge_now)
+        p = plan(dt(5, 58, 3), 11)
+        self.assertFalse(p.charge_now)
+        self.assertEqual(p.reason, "Niedrigtarif endet gleich")
+        self.assertEqual(p.start, dt(7, 0, 3))
+        self.assertTrue(plan(dt(5, 58, 3), 11, vorlauf=0).charge_now)
+        # Ist auch der Block nach dem Fenster geplant, lädt sie durch
+        self.assertTrue(plan(dt(5, 58, 3), 21).charge_now)
 
     def test_ziel_erreicht(self):
         p = self.plan(dt(22), 0)

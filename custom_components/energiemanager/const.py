@@ -150,5 +150,8 @@ EV_EFFICIENCY = 0.9
 EV_TOPUP_POWER_FACTOR = 0.7
 # So viel früher als die Zielzeit soll das Ziel rechnerisch erreicht sein
 EV_FINISH_BUFFER_MIN = 15
+# Wallboxen und Wärmepumpe brauchen eine Weile zum Herunterfahren; für sie endet
+# der Niedrigtarif so viele Minuten früher, damit sie nicht in den Normaltarif laufen
+LOW_END_LEAD_MIN = 3
 # Falls Ladestrom oder Phasen der Wallbox nicht lesbar sind
 EV_DEFAULT_POWER_KW = 11.0
