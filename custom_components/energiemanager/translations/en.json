@@ -25,6 +25,7 @@
           "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)",
           "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)",
           "battery_charge_energy_sensor": "Akkuladung (Energiezähler kWh, für Wandlungsverluste)",
+          "battery_discharge_sensor": "Akku-Entladeleistung (für die Reserve bis Niedrigtarif)",
           "pv_energy_sensor": "PV-Erzeugung (Energiezähler kWh, für Wandlungsverluste)",
           "house_energy_sensor": "Hausverbrauch (Energiezähler kWh, für Wandlungsverluste)"
         }
@@ -115,6 +116,7 @@
           "outdoor_temp_sensor": "Außentemperatur-Sensor (optional)",
           "grid_import_sensor": "Netzbezug (Energiezähler kWh, für Ø Strompreis)",
           "battery_charge_energy_sensor": "Akkuladung (Energiezähler kWh, für Wandlungsverluste)",
+          "battery_discharge_sensor": "Akku-Entladeleistung (für die Reserve bis Niedrigtarif)",
           "pv_energy_sensor": "PV-Erzeugung (Energiezähler kWh, für Wandlungsverluste)",
           "house_energy_sensor": "Hausverbrauch (Energiezähler kWh, für Wandlungsverluste)"
         }
@@ -237,6 +239,12 @@
       },
       "summer_ac_limit_w": {
         "name": "Sommer: AC-Grenze"
+      },
+      "low_reserve_pct": {
+        "name": "Akku: Reserve bis Niedrigtarif"
+      },
+      "low_reserve_hours": {
+        "name": "Akku: Reserve rechnet mit Verbrauch der letzten"
       },
       "summer_reserve_pct": {
         "name": "Sommer: Platzreserve"

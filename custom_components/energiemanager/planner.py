@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 import math
+from typing import Any
 
 LOW, NORMAL, HIGH = "low", "normal", "high"
 
@@ -342,6 +343,41 @@ def surplus(profile_kw: list[float], forecast: list[tuple[datetime, float]], sta
 def grid_charge_target(target_soc: float, pv_surplus_kwh: float, capacity_kwh: float) -> float:
     """SoC, bis zu dem aus dem Netz geladen wird; den Rest bis zum Ziel bringt die PV im Fenster."""
     return max(0.0, target_soc - pv_surplus_kwh / capacity_kwh * 100)
+
+
+def battery_demand_kw(
+    discharge_kw: dict[Any, float],
+    house_kw: dict[Any, float],
+    wallbox_kw: dict[Any, float],
+    pv_kw: dict[Any, float],
+) -> float | None:
+    """Mittlere Entladeleistung des Akkus (kW) über alle Abschnitte.
+
+    Ist der Akku gesperrt oder leer, liefert er nichts; dann zählt, was er hätte
+    liefern müssen: Hausverbrauch ohne Wallboxen minus PV. Je Abschnitt gilt der
+    größere der beiden Werte, nie negativ.
+    """
+    keys = set(discharge_kw) | set(house_kw)
+    vals = [
+        max(
+            0.0,
+            discharge_kw.get(ts, 0.0),
+            house_kw.get(ts, 0.0) - wallbox_kw.get(ts, 0.0) - pv_kw.get(ts, 0.0),
+        )
+        for ts in keys
+    ]
+    return sum(vals) / len(vals) if vals else None
+
+
+def reserve_resume(energy_kwh: float, load_kw: float, now: datetime, low_start: datetime) -> datetime:
+    """Frühester Zeitpunkt, ab dem `energy_kwh` beim Verbrauch `load_kw` gerade bis `low_start` reicht.
+
+    Bis dahin pausiert die Entladung, danach leert sich der Akku rechnerisch erst
+    zum Beginn des Niedrigtarifs. Reicht die Energie schon jetzt bis dahin, ist es `now`.
+    """
+    if load_kw <= 0:
+        return now
+    return min(low_start, max(now, low_start - timedelta(hours=energy_kwh / load_kw)))
 
 
 def peak_charge_limit_w(pv_kw: float, ac_limit_kw: float, max_w: int, margin_w: int, step_w: int) -> int:

@@ -24,6 +24,7 @@ CONF_BASE_FEE = "base_fee"
 CONF_TARIFF_START = "tariff_start"
 CONF_GRID_IMPORT_SENSOR = "grid_import_sensor"
 CONF_BATTERY_CHARGE_ENERGY_SENSOR = "battery_charge_energy_sensor"
+CONF_BATTERY_DISCHARGE_SENSOR = "battery_discharge_sensor"
 CONF_PV_ENERGY_SENSOR = "pv_energy_sensor"
 CONF_HOUSE_ENERGY_SENSOR = "house_energy_sensor"
 
@@ -51,6 +52,7 @@ DEFAULT_BASE_FEE = 21.04  # €/Monat
 DEFAULT_TARIFF_START = "2026-09-01"
 DEFAULT_GRID_IMPORT_SENSOR = "sensor.s10e_pro_consumption_from_grid_today"
 DEFAULT_BATTERY_CHARGE_ENERGY_SENSOR = "sensor.s10e_pro_battery_charge_today"
+DEFAULT_BATTERY_DISCHARGE_SENSOR = "sensor.s10e_pro_battery_discharge"
 DEFAULT_PV_ENERGY_SENSOR = "sensor.s10e_pro_solar_production_today"
 DEFAULT_HOUSE_ENERGY_SENSOR = "sensor.s10e_pro_house_consumption_today"
 DEFAULT_CAPACITY = 32.6
@@ -92,6 +94,8 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "grid_charge_min_w": (1500, 500, 6000, 100, "W"),
     "summer_ac_limit_w": (12000, 1000, 30000, 100, "W"),
     "summer_reserve_pct": (5, 0, 30, 1, "%"),
+    "low_reserve_pct": (20, 0, 50, 5, "%"),
+    "low_reserve_hours": (2, 0.5, 6, 0.5, "h"),
     "summer_morning_start_h": (5, 0, 12, 1, "h"),
     "summer_morning_target_soc": (30, 0, 100, 5, "%"),
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
@@ -142,6 +146,11 @@ SUMMER_CHARGE_MARGIN_W = 500
 SUMMER_CHARGE_STEP_W = 500
 # In der Spitze frei laden, wenn der SoC so weit unter der Ladegrenze liegt
 SUMMER_HYST_PCT = 3
+# Reserve bis Niedrigtarif: eine laufende Pause endet erst so weit über der Reserve,
+# damit PV-Schwankungen die dauerhaften Leistungsgrenzen nicht ständig umschalten
+RESERVE_HYST_PCT = 3
+# Verbrauch der letzten Stunden (5-Minuten-Statistik) so oft neu laden
+RECENT_LOAD_INTERVAL_MIN = 5
 # Zielladung: bis hierhin in den günstigen Zeiten, der Rest kurz vor der Zielzeit
 EV_TOPUP_FROM_PCT = 90
 # Wallbox-Energie → Fahrzeugakku

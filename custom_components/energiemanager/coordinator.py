@@ -17,6 +17,7 @@ from .const import (
     CONF_CAPACITY,
     CONF_BASE_FEE,
     CONF_BATTERY_CHARGE_ENERGY_SENSOR,
+    CONF_BATTERY_DISCHARGE_SENSOR,
     CONF_E3DC_DEVICE,
     CONF_EV2_MAX_SOC_SENSOR,
     CONF_EV2_NAME,
@@ -48,6 +49,7 @@ from .const import (
     CONF_WEATHER,
     DEFAULT_BASE_FEE,
     DEFAULT_BATTERY_CHARGE_ENERGY_SENSOR,
+    DEFAULT_BATTERY_DISCHARGE_SENSOR,
     DEFAULT_CAPACITY,
     DEFAULT_EV2_MAX_SOC_SENSOR,
     DEFAULT_EV2_NAME,
@@ -70,6 +72,8 @@ from .const import (
     EV_EFFICIENCY,
     EV_FINISH_BUFFER_MIN,
     LOW_END_LEAD_MIN,
+    RESERVE_HYST_PCT,
+    RECENT_LOAD_INTERVAL_MIN,
     EV_TOPUP_FROM_PCT,
     EV_TOPUP_POWER_FACTOR,
     POWER_MODE_REFRESH_S,
@@ -130,6 +134,8 @@ class EMState:
     wallbox_ev: dict[str, dict[str, Any]] = field(default_factory=dict)  # Zielladung zur Anzeige
     wallbox_car: dict[str, str | None] = field(default_factory=dict)  # erkanntes Auto je Wallbox
     profile_kw: list[float] = field(default_factory=list)
+    # Mittlere Entladeleistung des Akkus der letzten Stunden für die Reserve bis Niedrigtarif
+    recent_load_kw: float | None = None
     price_stats: dict[str, planner.PriceStats | None] = field(default_factory=dict)  # day/month/year
     price_stats_at: datetime | None = None
     price_history: dict[str, list[tuple[datetime, float, float]]] = field(default_factory=dict)
@@ -237,6 +243,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         self._locked_plans: dict[str, planner.ChargePlan] = {}
         self._profile_at: datetime | None = None
         self._applied_cmd: BatteryCommand | None = None
+        # Reserve bis Niedrigtarif: laufende Pause, und für welchen Fensterbeginn schon durchentladen wird
+        self._reserve_holding = False
+        self._reserve_done: datetime | None = None
+        self._recent_load_at: datetime | None = None
         self._applied_at: datetime | None = None
         self._wb_last_toggle: dict[str, datetime] = {}
         self._ev_soc_ref: dict[str, tuple[float, float]] = {}
@@ -328,6 +338,57 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         temps = [r["mean"] for r in stats.get(temp, []) if r.get("mean") is not None] if temp else []
         self.state.t_history = round(sum(temps) / len(temps), 1) if temps else None
         self._profile_at = now
+
+    async def _async_load_recent_load(self, now: datetime) -> None:
+        """Mittlere Entladeleistung des Akkus der letzten Stunden aus der 5-Minuten-Statistik.
+
+        Abschnitte, in denen der Akku gesperrt oder leer war, zählen mit der Leistung,
+        die er hätte liefern müssen (Haus ohne Wallboxen minus PV).
+        """
+        if self._recent_load_at and now - self._recent_load_at < timedelta(minutes=RECENT_LOAD_INTERVAL_MIN):
+            return
+        from homeassistant.components.recorder import get_instance
+        from homeassistant.components.recorder.statistics import statistics_during_period
+
+        discharge = self.cfg.get(CONF_BATTERY_DISCHARGE_SENSOR, DEFAULT_BATTERY_DISCHARGE_SENSOR)
+        house = self.cfg.get(CONF_HOUSE_POWER_SENSOR)
+        pv = self.cfg.get(CONF_PV_POWER_SENSOR)
+        wallboxes = self._wallbox_power_sensors()
+        if not discharge:
+            return
+        start = dt_util.as_utc(now - timedelta(hours=float(self.settings["low_reserve_hours"])))
+        ids = {i for i in (discharge, house, pv, *wallboxes) if i}
+        try:
+            stats = await get_instance(self.hass).async_add_executor_job(
+                statistics_during_period, self.hass, start, dt_util.as_utc(now), ids, "5minute", None, {"mean"}
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("5-Minuten-Statistik konnte nicht geladen werden: %s", err)
+            return
+
+        def means(ent: str | None) -> dict[Any, float]:
+            st = self.hass.states.get(ent) if ent else None
+            div = 1000 if st and (st.attributes.get("unit_of_measurement") or "").lower() == "w" else 1
+            return {r["start"]: r["mean"] / div for r in stats.get(ent, []) if r.get("mean") is not None}
+
+        wb_kw: dict[Any, float] = {}
+        for ent in wallboxes:
+            for ts, kw in means(ent).items():
+                wb_kw[ts] = wb_kw.get(ts, 0.0) + kw
+        self.state.recent_load_kw = planner.battery_demand_kw(means(discharge), means(house), wb_kw, means(pv))
+        self._recent_load_at = now
+
+    def _wallbox_power_sensors(self) -> list[str]:
+        """Ladeleistung der Wallboxen (Netz- und Sonnenanteil, E3DC); im Hausverbrauch enthalten."""
+        return [f"sensor.{wb}_consumption_{part}" for wb in self.wallboxes for part in ("net", "sun")]
+
+    def _battery_demand_now(self) -> float:
+        """Entladeleistung jetzt; gesperrt oder leer: Haus ohne Wallboxen minus PV."""
+        discharge = _kw(self.hass, self.cfg.get(CONF_BATTERY_DISCHARGE_SENSOR, DEFAULT_BATTERY_DISCHARGE_SENSOR))
+        house = _kw(self.hass, self.cfg.get(CONF_HOUSE_POWER_SENSOR)) or 0.0
+        wb = sum(_kw(self.hass, ent) or 0.0 for ent in self._wallbox_power_sensors())
+        pv = _kw(self.hass, self.cfg.get(CONF_PV_POWER_SENSOR)) or 0.0
+        return max(0.0, discharge or 0.0, house - wb - pv)
 
     async def _async_load_price_stats(self, now: datetime) -> None:
         """Ø Strompreis für Tag, Monat und Jahr aus der Statistik des Netzbezugs.
@@ -454,6 +515,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         s = self.state
         s.last_error = None
         await self._async_load_history(now)
+        await self._async_load_recent_load(now)
         await self._async_load_temp_forecast(now)
         await self._async_load_price_stats(now)
 
@@ -568,6 +630,40 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
                 discharge_to = None
         return limit, discharge_to
 
+    def _reserve(self, now: datetime) -> tuple[datetime, datetime, float] | None:
+        """(Pause bis, Beginn Niedrigtarif, Verbrauch in kW), solange die Entladung unter der Reserve pausiert.
+
+        Unter der Reserve (Standard 20 %) gibt der Akku seinen Rest erst ab, wenn er
+        damit rechnerisch genau bis zum nächsten Niedrigtarif reicht, statt leer auf
+        das Fenster zu warten. Hochgerechnet wird mit der mittleren Entladeleistung der
+        letzten Stunden, auch während der Pause laufend neu (dann mit der Leistung, die
+        der Akku liefern müsste). Einmal
+        freigegeben, wird bis zum Fenster durchentladen, damit die Grenzen nicht hin-
+        und herschalten.
+        """
+        s = self.state
+        base = float(self.settings["low_reserve_pct"])
+        reserve = base + (RESERVE_HYST_PCT if self._reserve_holding else 0)
+        win = planner.next_low_after(self.windows, now)
+        if (
+            base <= 0
+            or s.soc is None
+            or s.soc > reserve
+            or s.level == planner.LOW
+            or win is None
+            or self._reserve_done == win.start
+        ):
+            self._reserve_holding = False
+            return None
+        load = s.recent_load_kw if s.recent_load_kw is not None else self._battery_demand_now()
+        resume = planner.reserve_resume(s.soc / 100 * self.capacity, load, now, win.start)
+        if resume <= now:
+            self._reserve_holding = False
+            self._reserve_done = win.start
+            return None
+        self._reserve_holding = True
+        return resume, win.start, load
+
     def _summer_text(self, now: datetime) -> str:
         s = self.state
         if s.summer_clip_start is None:
@@ -585,6 +681,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         limit, discharge_to = self._summer(now)
         peak = self._summer_text(now)
         limit_text = f", Laden max. {limit} W ({peak})" if limit is not None else ""
+        reserve = self._reserve(now)
 
         if s.level == planner.LOW and s.plan is not None and s.soc is not None:
             # Was die PV bis Fensterende über den Hausverbrauch hinaus liefert, nicht aus dem Netz laden
@@ -629,6 +726,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             # Grenze mitsenden, damit sie beim Wechsel zur Sperre nicht neu geschrieben wird
             cmd = BatteryCommand(power_mode=PM_DISCHARGE, power_value=p, max_charge=limit)
             reason = f"Sommer: entladen ({p} W) bis {discharge_to:.0f} %, {peak}"
+        elif reserve is not None:
+            resume, low_start, load = reserve
+            cmd = BatteryCommand(max_discharge=0, max_charge=limit)
+            reason = (
+                f"Reserve: Akku bei {s.soc:.0f} %, Entladung pausiert bis ca. {resume:%H:%M} "
+                f"(Entladung Ø {load:.1f} kW), leer zum Niedrigtarif um {low_start:%H:%M}{limit_text}"
+            )
         elif limit == 0:
             cmd = BatteryCommand(max_charge=0)
             reason = f"Sommer: Ladesperre bei {s.summer_soc_ceiling:.0f} %, {peak}"

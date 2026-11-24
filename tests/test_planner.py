@@ -424,6 +424,31 @@ class TestSommer(unittest.TestCase):
         self.assertAlmostEqual(planner.deficit(profil, self.PROGNOSE, dt(9), dt(11)), 0.0)
         self.assertAlmostEqual(planner.deficit(profil, [(dt(7), 0.4)], dt(7), dt(8)), 0.6)
 
+    def test_reserve_resume(self):
+        # 4 kW Verbrauch: 5 kWh reichen 1:15 h, also ab 00:45 bis zum Fenster um 02:00
+        start = dt(2, tag=3)
+        self.assertEqual(planner.reserve_resume(5.0, 4.0, dt(18), start), dt(0, 45, tag=3))
+        # Reicht die Energie schon jetzt bis zum Fenster, gleich weiter entladen
+        self.assertEqual(planner.reserve_resume(40.0, 4.0, dt(18), start), dt(18))
+        self.assertEqual(planner.reserve_resume(5.0, 4.0, dt(1, 30, tag=3), start), dt(1, 30, tag=3))
+        # Leerer Akku: Pause bis zum Fenster; kein Verbrauch: nichts zu pausieren
+        self.assertEqual(planner.reserve_resume(0.0, 4.0, dt(18), start), start)
+        self.assertEqual(planner.reserve_resume(5.0, 0.0, dt(18), start), dt(18))
+
+    def test_battery_demand(self):
+        # Abschnitt 1: Akku entlädt 3 kW. 2: gesperrt, Haus 13 kW, davon Wallbox 11 kW → 2 kW.
+        # 3: gesperrt, PV deckt das Haus → 0. Mittel (3 + 2 + 0) / 3
+        entladung = {1: 3.0, 2: 0.0, 3: 0.0}
+        haus = {1: 3.0, 2: 13.0, 3: 2.0}
+        wallbox = {2: 11.0}
+        pv = {3: 5.0}
+        self.assertAlmostEqual(planner.battery_demand_kw(entladung, haus, wallbox, pv), 5 / 3)
+        # Akku speist die Wallbox mit: die Entladeleistung zählt
+        self.assertAlmostEqual(planner.battery_demand_kw({1: 8.0}, {1: 13.0}, {1: 11.0}, {}), 8.0)
+        # Nur Entladeleistung bekannt
+        self.assertAlmostEqual(planner.battery_demand_kw({1: 4.0, 2: 2.0}, {}, {}, {}), 3.0)
+        self.assertIsNone(planner.battery_demand_kw({}, {}, {}, {}))
+
     def test_peak_charge_limit(self):
         # PV 14,2 kW bei 12 kW AC: 2,2 kW + 0,5 kW Aufschlag, auf 500 W aufgerundet
         self.assertEqual(planner.peak_charge_limit_w(14.2, 12.0, 12000, 500, 500), 3000)
