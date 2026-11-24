@@ -435,6 +435,20 @@ class TestSommer(unittest.TestCase):
         self.assertEqual(planner.reserve_resume(0.0, 4.0, dt(18), start), start)
         self.assertEqual(planner.reserve_resume(5.0, 0.0, dt(18), start), dt(18))
 
+    def test_high_end(self):
+        w = planner.parse_tariff(OCTOPUS)
+        self.assertEqual(planner.high_end(w, dt(19, 30)), dt(21))
+        self.assertIsNone(planner.high_end(w, dt(21)))
+        self.assertIsNone(planner.high_end(w, dt(3)))
+        # Aneinander anschließende Hochtarif-Fenster zählen zusammen
+        w2 = planner.parse_tariff("17:00-18:00=high; 18:00-21:00=high; 02:00-06:00=low")
+        self.assertEqual(planner.high_end(w2, dt(17, 15)), dt(21))
+
+    def test_soc_after(self):
+        # 2 kW über 1,5 h aus 25 kWh: 3 kWh = 12 %
+        self.assertAlmostEqual(planner.soc_after(18.0, 25.0, 2.0, dt(19, 30), dt(21)), 6.0)
+        self.assertAlmostEqual(planner.soc_after(18.0, 25.0, 2.0, dt(21), dt(19)), 18.0)
+
     def test_battery_demand(self):
         # Abschnitt 1: Akku entlädt 3 kW. 2: gesperrt, Haus 13 kW, davon Wallbox 11 kW → 2 kW.
         # 3: gesperrt, PV deckt das Haus → 0. Mittel (3 + 2 + 0) / 3

@@ -246,6 +246,9 @@
       "low_reserve_hours": {
         "name": "Akku: Reserve rechnet mit Verbrauch der letzten"
       },
+      "high_reserve_floor_pct": {
+        "name": "Akku: Hochtarif durchentladen bis mindestens"
+      },
       "summer_reserve_pct": {
         "name": "Sommer: Platzreserve"
       },

@@ -380,6 +380,26 @@ def reserve_resume(energy_kwh: float, load_kw: float, now: datetime, low_start: 
     return min(low_start, max(now, low_start - timedelta(hours=energy_kwh / load_kw)))
 
 
+def high_end(windows: list[TariffWindow], now: datetime) -> datetime | None:
+    """Ende des laufenden Hochtarifs, über direkt anschließende Hochtarif-Fenster hinweg; sonst None."""
+    o = current_window(windows, now)
+    if o is None or o.level != HIGH:
+        return None
+    end = o.end
+    for _ in range(len(windows)):
+        n = current_window(windows, end)
+        if n is None or n.level != HIGH or n.end <= end:
+            break
+        end = n.end
+    return end
+
+
+def soc_after(soc_pct: float, capacity_kwh: float, load_kw: float, now: datetime, end: datetime) -> float:
+    """Ladestand (%), wenn der Akku von `now` bis `end` mit `load_kw` entlädt."""
+    hours = max((end - now).total_seconds() / 3600, 0.0)
+    return soc_pct - load_kw * hours / capacity_kwh * 100
+
+
 def peak_charge_limit_w(pv_kw: float, ac_limit_kw: float, max_w: int, margin_w: int, step_w: int) -> int:
     """Ladeleistung, die nur den PV-Anteil über der AC-Grenze in den Akku lässt.
 

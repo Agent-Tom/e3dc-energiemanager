@@ -246,6 +246,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         # Reserve bis Niedrigtarif: laufende Pause, und für welchen Fensterbeginn schon durchentladen wird
         self._reserve_holding = False
         self._reserve_done: datetime | None = None
+        # Hochtarif läuft, die Reserve wartet bis zu seinem Ende: (Ende, erwarteter SoC dann)
+        self._reserve_high: tuple[datetime, float] | None = None
         self._recent_load_at: datetime | None = None
         self._applied_at: datetime | None = None
         self._wb_last_toggle: dict[str, datetime] = {}
@@ -640,8 +642,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
         der Akku liefern müsste). Einmal
         freigegeben, wird bis zum Fenster durchentladen, damit die Grenzen nicht hin-
         und herschalten.
+
+        Im Hochtarif wird nicht pausiert, solange der Akku bei derselben Entladeleistung
+        zum Ende des Hochtarifs noch mindestens `high_reserve_floor_pct` (Standard 5 %)
+        hat; die Pause beginnt dann erst danach. Reicht es nicht, pausiert er gleich.
         """
         s = self.state
+        self._reserve_high = None
         base = float(self.settings["low_reserve_pct"])
         reserve = base + (RESERVE_HYST_PCT if self._reserve_holding else 0)
         win = planner.next_low_after(self.windows, now)
@@ -656,6 +663,16 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             self._reserve_holding = False
             return None
         load = s.recent_load_kw if s.recent_load_kw is not None else self._battery_demand_now()
+        hi_end = planner.high_end(self.windows, now)
+        if hi_end is not None:
+            floor = float(self.settings["high_reserve_floor_pct"])
+            if self._reserve_holding:
+                floor += RESERVE_HYST_PCT
+            soc_end = planner.soc_after(s.soc, self.capacity, load, now, hi_end)
+            if soc_end >= floor:
+                self._reserve_holding = False
+                self._reserve_high = (hi_end, soc_end)
+                return None
         resume = planner.reserve_resume(s.soc / 100 * self.capacity, load, now, win.start)
         if resume <= now:
             self._reserve_holding = False
@@ -732,6 +749,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EMState]):
             reason = (
                 f"Reserve: Akku bei {s.soc:.0f} %, Entladung pausiert bis ca. {resume:%H:%M} "
                 f"(Entladung Ø {load:.1f} kW), leer zum Niedrigtarif um {low_start:%H:%M}{limit_text}"
+            )
+        elif self._reserve_high is not None:
+            hi_end, soc_end = self._reserve_high
+            cmd = BatteryCommand(max_charge=limit)
+            reason = (
+                f"Reserve: Akku bei {s.soc:.0f} %, entlädt im Hochtarif weiter bis {hi_end:%H:%M} "
+                f"(dann ca. {max(soc_end, 0):.0f} %), danach Pause bis zum Niedrigtarif{limit_text}"
             )
         elif limit == 0:
             cmd = BatteryCommand(max_charge=0)

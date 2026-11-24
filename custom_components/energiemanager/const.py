@@ -96,6 +96,7 @@ SETTINGS_NUMBERS: dict[str, tuple[float, float, float, float, str | None]] = {
     "summer_reserve_pct": (5, 0, 30, 1, "%"),
     "low_reserve_pct": (20, 0, 50, 5, "%"),
     "low_reserve_hours": (2, 0.5, 6, 0.5, "h"),
+    "high_reserve_floor_pct": (5, 0, 30, 1, "%"),
     "summer_morning_start_h": (5, 0, 12, 1, "h"),
     "summer_morning_target_soc": (30, 0, 100, 5, "%"),
     "summer_discharge_w": (3000, 500, 12000, 100, "W"),
